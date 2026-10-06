@@ -311,7 +311,7 @@ class KafkaProducerConfigTest {
         @DisplayName("Should support various event object types")
         void testSupportsVariousEventTypes() {
             // Act
-            KafkaTemplate<String, Object> kafkaTemplate = kafkaProducerConfig.kafkaTemplate();
+            kafkaProducerConfig.kafkaTemplate();
 
             // Assert - Verify generic Object type can hold different types
             assertDoesNotThrow(() -> {

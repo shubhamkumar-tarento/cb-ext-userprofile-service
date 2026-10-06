@@ -1,20 +1,15 @@
 package com.igot.cb.util;
 
 import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
 
 import java.lang.reflect.Field;
-import java.nio.charset.StandardCharsets;
-import java.security.Key;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import javax.crypto.Cipher;
-import javax.crypto.spec.SecretKeySpec;
 
-import org.apache.commons.lang3.StringUtils;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -37,10 +32,10 @@ public class DefaultEncryptionServiceImplTest {
     @Test
     public void testStaticInitialization() throws Exception {
         // Verify static fields initialization using reflection
-        Field encryptionKeyField = DefaultEncryptionServiceImpl.class.getDeclaredField("encryption_key");
+        Field encryptionKeyField = DefaultEncryptionServiceImpl.class.getDeclaredField("encryptionKey");
         encryptionKeyField.setAccessible(true);
         String encryptionKey = (String) encryptionKeyField.get(null);
-        assertNotNull("encryption_key should be initialized", encryptionKey);
+        assertNotNull("encryptionKey should be initialized", encryptionKey);
 
         Field cipherField = DefaultEncryptionServiceImpl.class.getDeclaredField("c");
         cipherField.setAccessible(true);

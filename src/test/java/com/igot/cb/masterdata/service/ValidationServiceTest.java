@@ -5,6 +5,8 @@ import com.igot.cb.util.CbServerProperties;
 import com.igot.cb.util.Constants;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -78,27 +80,13 @@ class ValidationServiceTest {
         assertEquals("sortBy field is not allowed", api.getParams().getErrMsg());
     }
 
-    @Test
-    void validateSearchRequest_searchStringTooShort() {
+    // ab -> too short, abcdefghijklmnop -> too long, @@@ -> invalid characters
+    @ParameterizedTest
+    @ValueSource(strings = {"ab", "abcdefghijklmnop", "@@@"})
+    void validateSearchRequest_invalidSearchString(String searchString) {
         ApiResponse api = new ApiResponse();
         boolean result = validationService.validateSearchRequest(api,
-                Map.of(Constants.REQUEST, Map.of(Constants.SEARCH_STRING, "ab")));
-        assertFalse(result);
-    }
-
-    @Test
-    void validateSearchRequest_searchStringTooLong() {
-        ApiResponse api = new ApiResponse();
-        boolean result = validationService.validateSearchRequest(api,
-                Map.of(Constants.REQUEST, Map.of(Constants.SEARCH_STRING, "abcdefghijklmnop")));
-        assertFalse(result);
-    }
-
-    @Test
-    void validateSearchRequest_searchStringInvalidRegex() {
-        ApiResponse api = new ApiResponse();
-        boolean result = validationService.validateSearchRequest(api,
-                Map.of(Constants.REQUEST, Map.of(Constants.SEARCH_STRING, "@@@")));
+                Map.of(Constants.REQUEST, Map.of(Constants.SEARCH_STRING, searchString)));
         assertFalse(result);
     }
 

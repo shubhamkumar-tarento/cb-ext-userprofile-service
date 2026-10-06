@@ -3,6 +3,7 @@ package com.igot.cb.transactional.elasticsearch.service;
 import co.elastic.clients.elasticsearch._types.query_dsl.Query;
 import co.elastic.clients.elasticsearch.core.BulkResponse;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.igot.cb.exceptions.CustomException;
 import com.igot.cb.transactional.elasticsearch.dto.SearchCriteria;
 import com.igot.cb.transactional.elasticsearch.dto.SearchResult;
 
@@ -12,15 +13,15 @@ import java.util.Map;
 
 
 public interface EsClientService {
-  String addDocument(String esIndexName, String type, String id, Map<String, Object> document, String JsonFilePath);
+  String addDocument(String esIndexName, String type, String id, Map<String, Object> document, String jsonFilePath);
 
-  void updateDocument(String index, String indexType, String entityId, Map<String, Object> document, String JsonFilePath);
+  void updateDocument(String index, String indexType, String entityId, Map<String, Object> document, String jsonFilePath);
 
   void deleteDocument(String documentId, String esIndexName);
 
   void deleteDocumentsByCriteria(String esIndexName, Query query);
 
-  SearchResult searchDocuments(String esIndexName, SearchCriteria searchCriteria) throws Exception;
+  SearchResult searchDocuments(String esIndexName, SearchCriteria searchCriteria) throws CustomException;
 
   boolean isIndexPresent(String indexName);
 

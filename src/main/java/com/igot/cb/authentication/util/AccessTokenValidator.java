@@ -10,9 +10,9 @@ import org.apache.commons.lang3.StringUtils;
 import org.keycloak.common.util.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
+import lombok.RequiredArgsConstructor;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -22,10 +22,10 @@ import java.util.Map;
  * @author Mahesh RV
  */
 @Component
+@RequiredArgsConstructor
 public class AccessTokenValidator {
 
-    @Autowired
-    KeyManager keyManager;
+    private final KeyManager keyManager;
 
     private static Logger logger = LoggerFactory.getLogger(AccessTokenValidator.class.getName());
     private static final ObjectMapper mapper = new ObjectMapper();
@@ -80,7 +80,7 @@ public class AccessTokenValidator {
             }
             return tokenBody;
         }
-        return null;
+        return Collections.emptyMap();
     }
 
 

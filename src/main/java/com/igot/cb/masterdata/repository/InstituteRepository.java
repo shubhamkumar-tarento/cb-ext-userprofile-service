@@ -1,6 +1,5 @@
 package com.igot.cb.masterdata.repository;
 
-import com.igot.cb.masterdata.model.Degree;
 import com.igot.cb.masterdata.model.Institute;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

@@ -31,6 +31,6 @@ public class ServiceFactoryTest {
         DecryptionService decService = ServiceFactory.getDecryptionServiceInstance();
         assertNotNull("Encryption service should be initialized", encService);
         assertNotNull("Decryption service should be initialized", decService);
-        assertNotEquals("Services should be different instances", encService, decService);
+        assertNotSame("Services should be different instances", encService, decService);
     }
 }

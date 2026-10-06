@@ -147,7 +147,7 @@ public class ProjectCommonExceptionTest {
         ProjectCommonException exception = new ProjectCommonException(
                 ResponseCode.SERVER_ERROR,
                 "Initial message",
-                ResponseCode.SERVER_ERROR.getResponseCode()
+                ResponseCode.SERVER_ERROR.getStatusCode()
         );
         String newMessage = "New error message";
         exception.setMessage(newMessage);
@@ -163,7 +163,7 @@ public class ProjectCommonExceptionTest {
         ProjectCommonException exception = new ProjectCommonException(
                 ResponseCode.SERVER_ERROR,
                 "Test message",
-                ResponseCode.SERVER_ERROR.getResponseCode()
+                ResponseCode.SERVER_ERROR.getStatusCode()
         );
         ResponseCode mockResponseCode = mock(ResponseCode.class);
         when(mockResponseCode.getErrorCode()).thenReturn("NEW_ERR_001");

@@ -606,16 +606,10 @@ class KafkaEventPublisherTest {
      * Complex test event class with nested objects
      */
     static class ComplexEvent {
-        private String id;
-        private String data;
-        private NestedData nested;
-        private java.util.List<String> items;
 
         public ComplexEvent(String id, String data, NestedData nested, java.util.List<String> items) {
-            this.id = id;
-            this.data = data;
-            this.nested = nested;
-            this.items = items;
+            // Fields intentionally not stored: this test event only needs to be
+            // constructed and passed through KafkaEventPublisher.publish() by reference.
         }
     }
 
@@ -623,12 +617,10 @@ class KafkaEventPublisherTest {
      * Nested data class for complex events
      */
     static class NestedData {
-        private String name;
-        private int value;
 
         public NestedData(String name, int value) {
-            this.name = name;
-            this.value = value;
+            // Fields intentionally not stored: this test event only needs to be
+            // constructed and passed through KafkaEventPublisher.publish() by reference.
         }
     }
 }

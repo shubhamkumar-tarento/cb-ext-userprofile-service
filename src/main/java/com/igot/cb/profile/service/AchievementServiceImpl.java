@@ -6,6 +6,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.igot.cb.authentication.util.AccessTokenValidator;
 import com.igot.cb.common.KafkaEventPublisher;
+import com.igot.cb.exceptions.CustomException;
 import com.igot.cb.profile.model.CompetencyAcquiredEvent;
 import com.igot.cb.profile.model.CompetencyEventWrapper;
 import com.igot.cb.transactional.cassandrautils.CassandraOperation;
@@ -55,6 +56,12 @@ public class AchievementServiceImpl implements AchievementService{
     private static final String FIELD_REASON = "reason";
 
     private static final String FIELD_LEARNER_ID = "learnerId";
+
+    private static final String ACHIEVEMENT_CACHE_PREFIX = "user:achievement";
+
+    private static final String ERR_INVALID_ACCESS_TOKEN = "Invalid or missing access token";
+
+    private static final String DATE_FORMAT_PATTERN = "yyyy-MM-dd'T'HH:mm:ss.SSSZ";
 
     private final CacheService cacheService;
 
@@ -109,7 +116,7 @@ public class AchievementServiceImpl implements AchievementService{
         }
         // Cache record
         cacheService.putCache(
-                buildCacheKey("user:achievement", userId, (String) requestData.get(Constants.CONTEXT_TYPE), id),
+                buildCacheKey(ACHIEVEMENT_CACHE_PREFIX, userId, (String) requestData.get(Constants.CONTEXT_TYPE), id),
                 achievementRecord, cbServerProperties.getAchievementCacheTtl()
         );
         // Publish competency event for creation
@@ -159,7 +166,7 @@ public class AchievementServiceImpl implements AchievementService{
         }
 
         Map<String, Object> existingRecord = getAchievementFromCassandra(userId, contextType, id);
-        if (existingRecord == null) {
+        if (MapUtils.isEmpty(existingRecord)) {
             ProjectUtil.errorResponse(response, "Achievement records not found", HttpStatus.NOT_FOUND);
             return response;
         }
@@ -178,7 +185,7 @@ public class AchievementServiceImpl implements AchievementService{
         if (cbServerProperties.isRequireEs()) {
             updateAchievementInElasticsearch(id, existingRecord, userId, updateOnTimestamp);
         }
-        cacheService.putCache(buildCacheKey("user:achievement", userId, contextType, id), existingRecord,cbServerProperties.getAchievementCacheTtl());
+        cacheService.putCache(buildCacheKey(ACHIEVEMENT_CACHE_PREFIX, userId, contextType, id), existingRecord,cbServerProperties.getAchievementCacheTtl());
 
         // Publish competency update event only if there are actual changes (added or removed)
         if (hasCompetencyChanges(competencyDelta) || isUrlChanged) {
@@ -204,7 +211,7 @@ public class AchievementServiceImpl implements AchievementService{
         }
         Map<String, Object> achievement = null;
         if (StringUtils.isNotBlank(contextType)) {
-            String cacheKey = buildCacheKey("user:achievement", userId, contextType, achievementId);
+            String cacheKey = buildCacheKey(ACHIEVEMENT_CACHE_PREFIX, userId, contextType, achievementId);
             achievement = getAchievementFromCache(cacheKey);
         }
         if (MapUtils.isEmpty(achievement)) {
@@ -258,7 +265,7 @@ public class AchievementServiceImpl implements AchievementService{
             return response;
         }
         // Remove from cache
-        String cacheKey = buildCacheKey("user:achievement", userId, contextType, achievementId);
+        String cacheKey = buildCacheKey(ACHIEVEMENT_CACHE_PREFIX, userId, contextType, achievementId);
         cacheService.removeCache(cacheKey);
         // Remove from ES
         if (cbServerProperties.isRequireEs()) {
@@ -294,7 +301,7 @@ public class AchievementServiceImpl implements AchievementService{
         try {
             String userIdFromToken = accessTokenValidator.fetchUserIdFromAccessToken(authToken);
             if (StringUtils.isBlank(userIdFromToken)) {
-                ProjectUtil.errorResponse(response, "Invalid or missing access token", HttpStatus.UNAUTHORIZED);
+                ProjectUtil.errorResponse(response, ERR_INVALID_ACCESS_TOKEN, HttpStatus.UNAUTHORIZED);
                 return response;
             }
             if (!validateStatusUpdateRequest(request, response)) {
@@ -329,7 +336,6 @@ public class AchievementServiceImpl implements AchievementService{
             // Store approvedon as date (yyyy-MM-dd) for Cassandra
             java.time.Instant approvedOnTimestamp = java.time.Instant.now();
             updateAttributes.put(Constants.FIELD_APPROVED_ON, approvedOnTimestamp);
-            String approvedOnDateEs = getCurrentUtcTimestampFormatted();
             Map<String, Object> cassandraResponse = cassandraOperation.updateRecordByCompositeKey(
                 Constants.KEYSPACE_SUNBIRD,
                 Constants.LEARNER_ACHIEVEMENT_TABLE,
@@ -351,50 +357,10 @@ public class AchievementServiceImpl implements AchievementService{
 
     private void updateAchievementInES(List<Map<String, Object>> records, Map<String, Object> reqMap, String userIdFromToken, java.time.Instant approvedOnTimestamp) {
         try {
-            Map<String, Object> esUpdateMap = new HashMap<>();
-            if (CollectionUtils.isNotEmpty(records)) {
-                Map<String, Object> dbRecord = records.get(0);
-                for (Map.Entry<String, Object> entry : dbRecord.entrySet()) {
-                    Object value = entry.getValue();
-                    if (value instanceof java.time.LocalDate) {
-                        esUpdateMap.put(entry.getKey(), value.toString());
-                    } else if (value instanceof java.time.LocalDateTime) {
-                        esUpdateMap.put(entry.getKey(), value.toString());
-                    } else if ("contextdata".equalsIgnoreCase(entry.getKey()) && value != null) {
-                        if (value instanceof String) {
-                            try {
-                                Map<String, Object> contextDataMap = objectMapper.readValue((String) value, Map.class);
-                                esUpdateMap.put(entry.getKey(), contextDataMap);
-                            } catch (Exception ex) {
-                                log.warn("Failed to parse contextData string to Map for ES. Storing as empty object.", ex);
-                                esUpdateMap.put(entry.getKey(), new HashMap<>());
-                            }
-                        } else if (value instanceof Map) {
-                            esUpdateMap.put(entry.getKey(), value);
-                        } else {
-                            esUpdateMap.put(entry.getKey(), new HashMap<>());
-                        }
-                    } else {
-                        esUpdateMap.put(entry.getKey(), value);
-                    }
-                }
-            }
+            Map<String, Object> esUpdateMap = buildEsUpdateMapFromRecord(records);
             Map<String, Object> esDoc = esClientService.readDocument(Constants.LEARNER_ACHIEVEMENT_INDEX, reqMap.get(Constants.ID).toString());
 
-            String createdOnFormatted = null;
-            if (MapUtils.isNotEmpty(esDoc) && esDoc.get(Constants.CREATED_ON) instanceof String) {
-                createdOnFormatted = (String) esDoc.get(Constants.CREATED_ON);
-            } else {
-                // fallback to existingRecord if ES not found
-                Object createdOnObj = records.get(0).get(Constants.CREATED_ON);
-                if (createdOnObj instanceof String) {
-                    createdOnFormatted = (String) createdOnObj;
-                } else if (createdOnObj instanceof LocalDate) {
-                    createdOnFormatted = ((LocalDate) createdOnObj)
-                            .atStartOfDay(ZoneId.of("UTC"))
-                            .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSZ"));
-                }
-            }
+            String createdOnFormatted = resolveCreatedOnFormatted(esDoc, records);
             String updatedOn = (String) esDoc.get(Constants.UPDATED_ON);
             if (StringUtils.isNotBlank(updatedOn)) {
                 esUpdateMap.put(Constants.UPDATED_ON, updatedOn);
@@ -414,6 +380,67 @@ public class AchievementServiceImpl implements AchievementService{
         } catch (Exception e) {
             log.error("Exception while updating achievement in ES", e);
         }
+    }
+
+    /**
+     * Builds the ES update map from the latest Cassandra record, normalizing date fields
+     * to strings and parsing the contextData field appropriately.
+     */
+    private Map<String, Object> buildEsUpdateMapFromRecord(List<Map<String, Object>> records) {
+        Map<String, Object> esUpdateMap = new HashMap<>();
+        if (CollectionUtils.isEmpty(records)) {
+            return esUpdateMap;
+        }
+        Map<String, Object> dbRecord = records.get(0);
+        for (Map.Entry<String, Object> entry : dbRecord.entrySet()) {
+            Object value = entry.getValue();
+            if (value instanceof java.time.LocalDate || value instanceof java.time.LocalDateTime) {
+                esUpdateMap.put(entry.getKey(), value.toString());
+            } else if ("contextdata".equalsIgnoreCase(entry.getKey()) && value != null) {
+                esUpdateMap.put(entry.getKey(), parseContextDataForEs(value));
+            } else {
+                esUpdateMap.put(entry.getKey(), value);
+            }
+        }
+        return esUpdateMap;
+    }
+
+    /**
+     * Parses the contextData value (String JSON or Map) into a Map suitable for ES indexing.
+     * Extracted out of the per-entry loop above to keep a single try block per method (S1141).
+     */
+    private Map<String, Object> parseContextDataForEs(Object value) {
+        if (value instanceof String contextDataJson) {
+            try {
+                return objectMapper.readValue(contextDataJson, Map.class);
+            } catch (Exception ex) {
+                log.warn("Failed to parse contextData string to Map for ES. Storing as empty object.", ex);
+                return new HashMap<>();
+            }
+        } else if (value instanceof Map<?, ?> contextDataMap) {
+            return (Map<String, Object>) contextDataMap;
+        }
+        return new HashMap<>();
+    }
+
+    /**
+     * Resolves the createdOn value to use for ES, preferring the existing ES document's value,
+     * and falling back to the Cassandra record's createdOn (formatting LocalDate when needed).
+     */
+    private String resolveCreatedOnFormatted(Map<String, Object> esDoc, List<Map<String, Object>> records) {
+        if (MapUtils.isNotEmpty(esDoc) && esDoc.get(Constants.CREATED_ON) instanceof String createdOnStr) {
+            return createdOnStr;
+        }
+        // fallback to existingRecord if ES not found
+        Object createdOnObj = records.get(0).get(Constants.CREATED_ON);
+        if (createdOnObj instanceof String createdOnStr) {
+            return createdOnStr;
+        } else if (createdOnObj instanceof LocalDate createdOnDate) {
+            return createdOnDate
+                    .atStartOfDay(ZoneId.of("UTC"))
+                    .format(DateTimeFormatter.ofPattern(DATE_FORMAT_PATTERN));
+        }
+        return null;
     }
 
     private boolean validateStatusUpdateRequest(Map<String, Object> request, ApiResponse response) {
@@ -487,20 +514,19 @@ public class AchievementServiceImpl implements AchievementService{
         for (Map<String, Object> item : data) {
             Object userIdObj = item.get(Constants.USER_ID);
             if (StringUtils.isEmpty((String) userIdObj)) userIdObj = item.get(Constants.USER_ID_LOWER);
-            if (userIdObj instanceof String && StringUtils.isNotBlank((String) userIdObj)) {
-                uniqueUserIds.add((String) userIdObj);
+            if (userIdObj instanceof String userIdStr && StringUtils.isNotBlank(userIdStr)) {
+                uniqueUserIds.add(userIdStr);
             }
         }
         // Fetch user details (replace with actual Redis/Cassandra logic)
         List<Object> userDetailsList = fetchUserDetails(new ArrayList<>(uniqueUserIds));
         Map<String, String> userIdToUsername = new HashMap<>();
         for (Object user : userDetailsList) {
-            if (user instanceof Map) {
-                Map userMap = (Map) user;
+            if (user instanceof Map<?, ?> userMap) {
                 Object idObj = userMap.get(Constants.USER_ID_KEY);
                 Object nameObj = userMap.get(Constants.FIRST_NAME_KEY);
-                if (idObj instanceof String && nameObj instanceof String) {
-                    userIdToUsername.put((String) idObj, (String) nameObj);
+                if (idObj instanceof String idStr && nameObj instanceof String nameStr) {
+                    userIdToUsername.put(idStr, nameStr);
                 }
             }
         }
@@ -511,7 +537,7 @@ public class AchievementServiceImpl implements AchievementService{
         // Prepare Redis keys (assuming prefix is needed)
         List<String> redisKeys = userIds.stream()
             .map(id -> Constants.USER_PREFIX + id)
-            .collect(Collectors.toList());
+            .toList();
         // Fetch values for all keys from Redis
         List<Object> redisResults = cacheService.hget(redisKeys); // Use your cacheService
         // Build userDetailsMap from redis results
@@ -526,7 +552,7 @@ public class AchievementServiceImpl implements AchievementService{
         // Find missing userIds
         List<String> missingUserIds = userIds.stream()
                 .filter(id -> !userDetailsMap.containsKey(id))
-                .collect(Collectors.toList());
+                .toList();
         // Fetch from Cassandra if missing
         if (!missingUserIds.isEmpty()) {
             List<Object> cassandraResults = fetchUserFromPrimary(missingUserIds);
@@ -543,15 +569,12 @@ public class AchievementServiceImpl implements AchievementService{
 
     public List<Object> fetchUserFromPrimary(List<String> userIds) {
         log.info("AchievementServiceImpl::fetchUserFromPrimary: Fetching user data from Cassandra");
-        List<Object> userList = new ArrayList<>();
         Map<String, Object> propertyMap = new HashMap<>();
         propertyMap.put(Constants.ID, userIds);
-        long startTime = System.currentTimeMillis();
         List<Map<String, Object>> userInfoList = cassandraOperation.getRecordsByPropertiesWithoutFiltering(
                 Constants.KEYSPACE_SUNBIRD, Constants.USER_TABLE, propertyMap,
                 Arrays.asList(Constants.FIRST_NAME, Constants.ID), null);
-        // updateMetricsDbOperation(Constants.DISCUSSION_SEARCH, Constants.CASSANDRA, Constants.READ, startTime);
-        userList = userInfoList.stream()
+        return userInfoList.stream()
                 .map(userInfo -> {
                     Map<String, Object> userMap = new HashMap<>();
                     String userId = (String) userInfo.get(Constants.ID);
@@ -561,7 +584,6 @@ public class AchievementServiceImpl implements AchievementService{
                     return userMap;
                 })
                 .collect(Collectors.toList());
-        return userList;
     }
 
     public String generateRedisJwtTokenKey(Object requestPayload) {
@@ -570,7 +592,7 @@ public class AchievementServiceImpl implements AchievementService{
                 String reqJsonString = objectMapper.writeValueAsString(requestPayload);
                 return JWT.create()
                         .withClaim(Constants.REQUEST, reqJsonString)
-                        .sign(Algorithm.HMAC256(Constants.JWT_SECRET_KEY));
+                        .sign(Algorithm.HMAC256(cbServerProperties.getAchievementJwtSecretKey()));
             } catch (JsonProcessingException e) {
                 log.error("Error occurred while converting json object to json string", e);
             }
@@ -603,15 +625,15 @@ public class AchievementServiceImpl implements AchievementService{
             return "contextData is missing in request";
         }
         String requiredFieldsConfig = cbServerProperties.getAchievementsMandatoryFields();
-        String[] requiredFields = requiredFieldsConfig.split(",");
+        String[] mandatoryFields = requiredFieldsConfig.split(",");
 
         //  Validate mandatory fields
-        for (String field : requiredFields) {
+        for (String field : mandatoryFields) {
             Object value = contextData.get(field.trim());
             if (value == null) {
                 return field + " is mandatory and missing";
             }
-            if (value instanceof String && StringUtils.isBlank((String) value)) {
+            if (value instanceof String valueStr && StringUtils.isBlank(valueStr)) {
                 return field + " is mandatory and cannot be empty";
             }
         }
@@ -661,23 +683,23 @@ public class AchievementServiceImpl implements AchievementService{
                             Constants.USERID_KEY
                     );
             if (result == null || result.isEmpty()) {
-                return null;
+                return Collections.emptyMap();
             }
-            Map<String, Object> record = result.get(0);
+            Map<String, Object> achievementRecord = result.get(0);
 
             // Convert contextdata JSON string back to Map
-            Object contextDataObj = record.get(Constants.CONTEXT_DATA);
-            if (contextDataObj instanceof String) {
+            Object contextDataObj = achievementRecord.get(Constants.CONTEXT_DATA);
+            if (contextDataObj instanceof String contextDataJson) {
                 Map<String, Object> contextData =
-                        objectMapper.readValue((String) contextDataObj, Map.class);
-                record.put(Constants.CONTEXT_DATA, contextData);
+                        objectMapper.readValue(contextDataJson, Map.class);
+                achievementRecord.put(Constants.CONTEXT_DATA, contextData);
             }
-            return record;
+            return achievementRecord;
 
         } catch (Exception e) {
             log.error("Failed to fetch learner achievement for userId={}, contextType={}, id={}",
                     userId, contextType, id, e);
-            return null;
+            return Collections.emptyMap();
         }
     }
 
@@ -692,28 +714,20 @@ public class AchievementServiceImpl implements AchievementService{
                 log.error("Failed to deserialize cached achievement for key {}", cacheKey, e);
             }
         }
-        return null;
+        return Collections.emptyMap();
     }
 
     private Map<String, Object> getAndCacheAchievementFromCassandra(String userId, String contextType, String achievementId) {
         Map<String, Object> achievement = getAchievementFromCassandra(userId, contextType, achievementId);
-        if (achievement != null && StringUtils.isNotBlank(contextType)) {
+        if (MapUtils.isNotEmpty(achievement) && StringUtils.isNotBlank(contextType)) {
             try {
                 String achievementJson = objectMapper.writeValueAsString(achievement);
-                cacheService.putCache(buildCacheKey("user:achievement", userId, contextType, achievementId), achievementJson,cbServerProperties.getAchievementCacheTtl());
+                cacheService.putCache(buildCacheKey(ACHIEVEMENT_CACHE_PREFIX, userId, contextType, achievementId), achievementJson,cbServerProperties.getAchievementCacheTtl());
             } catch (Exception e) {
                 log.error("Failed to serialize achievement for caching", e);
             }
         }
         return achievement;
-    }
-
-    /**
-     * Returns the current UTC timestamp formatted as yyyy-MM-dd'T'HH:mm:ss.SSSZ
-     */
-    private String getCurrentUtcTimestampFormatted() {
-        ZonedDateTime now = ZonedDateTime.now(ZoneId.of("UTC"));
-        return now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSZ"));
     }
 
     /**
@@ -758,7 +772,9 @@ public class AchievementServiceImpl implements AchievementService{
             }
         } catch (Exception e) {
             log.error("Exception while refreshing achievement search cache for userId: {}", userId, e);
-            throw new RuntimeException("Failed to refresh achievement search cache for userId: " + userId, e);
+            throw new CustomException("error refreshing achievement search cache",
+                    "Failed to refresh achievement search cache for userId: " + userId,
+                    HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -768,7 +784,7 @@ public class AchievementServiceImpl implements AchievementService{
         ApiResponse response = ProjectUtil.createDefaultResponse(Constants.API_ACHIEVEMENT_LIST);
         String userId = accessTokenValidator.fetchUserIdFromAccessToken(authToken);
         if (StringUtils.isBlank(userId)) {
-            ProjectUtil.errorResponse(response, "Invalid or missing access token", HttpStatus.UNAUTHORIZED);
+            ProjectUtil.errorResponse(response, ERR_INVALID_ACCESS_TOKEN, HttpStatus.UNAUTHORIZED);
             return response;
         }
         if (StringUtils.isNotBlank(id)) {
@@ -954,18 +970,18 @@ public class AchievementServiceImpl implements AchievementService{
      * Retrieves formatted createdOn timestamp from ES document or existing record
      */
     private String getFormattedCreatedOn(Map<String, Object> esDoc, Map<String, Object> existingRecord) {
-        if (MapUtils.isNotEmpty(esDoc) && esDoc.get(Constants.CREATED_ON) instanceof String) {
-            return (String) esDoc.get(Constants.CREATED_ON);
+        if (MapUtils.isNotEmpty(esDoc) && esDoc.get(Constants.CREATED_ON) instanceof String createdOnStr) {
+            return createdOnStr;
         }
 
         Object createdOnObj = existingRecord.get(Constants.CREATED_ON);
-        if (createdOnObj instanceof String) {
-            return (String) createdOnObj;
+        if (createdOnObj instanceof String createdOnStr) {
+            return createdOnStr;
         }
-        if (createdOnObj instanceof LocalDate) {
-            return ((LocalDate) createdOnObj)
+        if (createdOnObj instanceof LocalDate createdOnDate) {
+            return createdOnDate
                     .atStartOfDay(ZoneId.of("UTC"))
-                    .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSZ"));
+                    .format(DateTimeFormatter.ofPattern(DATE_FORMAT_PATTERN));
         }
         return null;
     }
@@ -1018,7 +1034,9 @@ public class AchievementServiceImpl implements AchievementService{
         if (value instanceof String str) {
             try {
                 return Instant.parse(str);
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                // not a parsable Instant string; fall through and return null below
+                log.debug("Unable to parse createdOn value as Instant: {}", str);
             }
         }
 
@@ -1059,7 +1077,7 @@ public class AchievementServiceImpl implements AchievementService{
 
                 urlChangedCompetencies = urlChangedCompetencies.stream()
                         .filter(comp -> !removedKeys.contains(buildKey(comp)))
-                        .collect(Collectors.toList());
+                        .toList();
 
                 changedCompetencies.addAll(urlChangedCompetencies);
             }
@@ -1222,7 +1240,7 @@ public class AchievementServiceImpl implements AchievementService{
         Object competenciesObj = contextData.get(Constants.COMPETENCIES_V6);
         if (competenciesObj instanceof List<?> list) {
             return list.stream()
-                    .filter(item -> item instanceof Map)
+                    .filter(Map.class::isInstance)
                     .map(item -> (Map<String, Object>) item)
                     .toList();
         }
@@ -1279,19 +1297,19 @@ public class AchievementServiceImpl implements AchievementService{
         delta.unchanged = existingKeys.stream()
                 .filter(newKeys::contains)
                 .map(key -> buildCompetencyIdMap(newMap.get(key), null))
-                .collect(Collectors.toList());
+                .toList();
 
         // Added: keys in new but not in existing
         delta.added = newKeys.stream()
                 .filter(key -> !existingKeys.contains(key))
                 .map(key -> buildCompetencyIdMap(newMap.get(key), Constants.ADDED))
-                .collect(Collectors.toList());
+                .toList();
 
         // Removed: keys in existing but not in new
         delta.removed = existingKeys.stream()
                 .filter(key -> !newKeys.contains(key))
                 .map(key -> buildCompetencyIdMap(existingMap.get(key), Constants.REMOVED))
-                .collect(Collectors.toList());
+                .toList();
 
         return delta;
     }
@@ -1344,9 +1362,9 @@ public class AchievementServiceImpl implements AchievementService{
 
         if (contextDataObj instanceof Map) {
             return (Map<String, Object>) contextDataObj;
-        } else if (contextDataObj instanceof String) {
+        } else if (contextDataObj instanceof String contextDataJson) {
             try {
-                return objectMapper.readValue((String) contextDataObj, Map.class);
+                return objectMapper.readValue(contextDataJson, Map.class);
             } catch (Exception e) {
                 log.warn("Failed to parse context data from achievement record", e);
                 return new HashMap<>();
@@ -1437,24 +1455,43 @@ public class AchievementServiceImpl implements AchievementService{
             return null;
         }
         if (node instanceof Map<?, ?> map) {
-            for (Map.Entry<?, ?> entry : map.entrySet()) {
-                if (!(entry.getKey() instanceof String key)) {
-                    continue;
-                }
-                if (!allowedFields.contains(key)) {
-                    return "Invalid field in request: '" + key + "'. Only configured fields are allowed.";
-                }
-                String childError = validateFieldsRecursively(entry.getValue(), allowedFields);
-                if (StringUtils.isNotBlank(childError)) {
-                    return childError;
-                }
-            }
+            return validateMapFields(map, allowedFields);
         } else if (node instanceof List<?> list) {
-            for (Object item : list) {
-                String childError = validateFieldsRecursively(item, allowedFields);
-                if (StringUtils.isNotBlank(childError)) {
-                    return childError;
-                }
+            return validateListFields(list, allowedFields);
+        }
+        return null;
+    }
+
+    /**
+     * Validates that every key of the given map is in {@code allowedFields}, recursing into
+     * nested values. Extracted from {@link #validateFieldsRecursively} to keep its cognitive
+     * complexity low.
+     */
+    private String validateMapFields(Map<?, ?> map, Set<String> allowedFields) {
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            if (!(entry.getKey() instanceof String key)) {
+                continue;
+            }
+            if (!allowedFields.contains(key)) {
+                return "Invalid field in request: '" + key + "'. Only configured fields are allowed.";
+            }
+            String childError = validateFieldsRecursively(entry.getValue(), allowedFields);
+            if (StringUtils.isNotBlank(childError)) {
+                return childError;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Validates that every element of the given list recursively satisfies {@code allowedFields}.
+     * Extracted from {@link #validateFieldsRecursively} to keep its cognitive complexity low.
+     */
+    private String validateListFields(List<?> list, Set<String> allowedFields) {
+        for (Object item : list) {
+            String childError = validateFieldsRecursively(item, allowedFields);
+            if (StringUtils.isNotBlank(childError)) {
+                return childError;
             }
         }
         return null;
@@ -1466,7 +1503,7 @@ public class AchievementServiceImpl implements AchievementService{
         ApiResponse response = ProjectUtil.createDefaultResponse(Constants.API_ACHIEVEMENT_V2_LIST);
         String userId = accessTokenValidator.fetchUserIdFromAccessToken(authToken);
         if (StringUtils.isBlank(userId)) {
-            ProjectUtil.errorResponse(response, "Invalid or missing access token", HttpStatus.UNAUTHORIZED);
+            ProjectUtil.errorResponse(response, ERR_INVALID_ACCESS_TOKEN, HttpStatus.UNAUTHORIZED);
             return response;
         }
         List<String> achievementIds = null;
@@ -1490,7 +1527,7 @@ public class AchievementServiceImpl implements AchievementService{
                 if (StringUtils.isBlank(achievementId)) {
                     continue;
                 }
-                String cacheKey = buildCacheKey("user:achievement", userId, Constants.ACHIEVEMENTS, achievementId);
+                String cacheKey = buildCacheKey(ACHIEVEMENT_CACHE_PREFIX, userId, Constants.ACHIEVEMENTS, achievementId);
                 Map<String, Object> achievement = getAchievementFromCache(cacheKey);
                 if (MapUtils.isNotEmpty(achievement)) {
                     log.info("AchievementServiceImpl::getUserAchievementsByUserIds: fetched from cache for achievementId: {}", achievementId);
@@ -1538,33 +1575,47 @@ public class AchievementServiceImpl implements AchievementService{
     private Map<String, Object> applyBulkListFilters(Map<String, Object> achievement,
                                                      Set<String> responseFields,
                                                      Set<String> contextDataFields) {
-        // filter top-level fields
-        Map<String, Object> filtered;
-        if (CollectionUtils.isEmpty(responseFields)) {
-            filtered = new HashMap<>(achievement);   // copy so we can mutate contextData safely
-        } else {
-            filtered = new LinkedHashMap<>();
-            for (String field : responseFields) {
-                if (achievement.containsKey(field)) {
-                    filtered.put(field, achievement.get(field));
-                }
-            }
-        }
+        Map<String, Object> filtered = filterTopLevelFields(achievement, responseFields);
+        filterContextDataFieldsInPlace(filtered, contextDataFields);
+        return filtered;
+    }
 
-        // filter contextData fields
-        if (CollectionUtils.isNotEmpty(contextDataFields) && filtered.containsKey(Constants.CONTEXT_DATA)) {
-            Object contextDataObj = filtered.get(Constants.CONTEXT_DATA);
-            if (contextDataObj instanceof Map<?, ?> rawMap) {
-                Map<String, Object> filteredContextData = new LinkedHashMap<>();
-                for (String field : contextDataFields) {
-                    if (rawMap.containsKey(field)) {
-                        filteredContextData.put(field, rawMap.get(field));
-                    }
-                }
-                filtered.put(Constants.CONTEXT_DATA, filteredContextData);
+    /**
+     * Keeps only the top-level fields listed in {@code responseFields} (or all fields when empty).
+     * Extracted from {@link #applyBulkListFilters} to keep its cognitive complexity low.
+     */
+    private Map<String, Object> filterTopLevelFields(Map<String, Object> achievement, Set<String> responseFields) {
+        if (CollectionUtils.isEmpty(responseFields)) {
+            return new HashMap<>(achievement);   // copy so we can mutate contextData safely
+        }
+        Map<String, Object> filtered = new LinkedHashMap<>();
+        for (String field : responseFields) {
+            if (achievement.containsKey(field)) {
+                filtered.put(field, achievement.get(field));
             }
         }
         return filtered;
+    }
+
+    /**
+     * Narrows the contextData entry of {@code filtered} down to {@code contextDataFields}, in place.
+     * Extracted from {@link #applyBulkListFilters} to keep its cognitive complexity low.
+     */
+    private void filterContextDataFieldsInPlace(Map<String, Object> filtered, Set<String> contextDataFields) {
+        if (CollectionUtils.isEmpty(contextDataFields) || !filtered.containsKey(Constants.CONTEXT_DATA)) {
+            return;
+        }
+        Object contextDataObj = filtered.get(Constants.CONTEXT_DATA);
+        if (!(contextDataObj instanceof Map<?, ?> rawMap)) {
+            return;
+        }
+        Map<String, Object> filteredContextData = new LinkedHashMap<>();
+        for (String field : contextDataFields) {
+            if (rawMap.containsKey(field)) {
+                filteredContextData.put(field, rawMap.get(field));
+            }
+        }
+        filtered.put(Constants.CONTEXT_DATA, filteredContextData);
     }
 
     private boolean hasUrlChanges(Map<String, Object> existingRecord,
@@ -1625,7 +1676,7 @@ public class AchievementServiceImpl implements AchievementService{
         //  Reuse SAME structure builder
         return existingCompetencies.stream()
                 .map(comp -> buildCompetencyIdMap(comp, "changeUrl"))
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private String buildKey(Map<String, String> comp) {

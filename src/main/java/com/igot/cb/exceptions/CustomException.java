@@ -2,6 +2,7 @@ package com.igot.cb.exceptions;
 
 import lombok.Getter;
 import lombok.Setter;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
@@ -15,6 +16,7 @@ public class CustomException extends RuntimeException {
     private String errorCode;
     private int responseCode;
 
+    @Autowired
     public CustomException() {
     }
 

@@ -18,7 +18,10 @@ public class DefaultEncryptionServiceImpl implements EncryptionService {
 
     private static final Logger logger = LoggerFactory.getLogger(DefaultEncryptionServiceImpl.class);
 
-    private static String encryption_key = "";
+    private static final byte[] keyValue =
+            new byte[] {'T', 'h', 'i', 's', 'A', 's', 'I', 'S', 'e', 'r', 'c', 'e', 'K', 't', 'e', 'y'};
+
+    private static String encryptionKey = "";
 
     private String sunbirdEncryption = "";
 
@@ -26,8 +29,16 @@ public class DefaultEncryptionServiceImpl implements EncryptionService {
 
     static {
         try {
-            encryption_key = getSalt();
+            encryptionKey = getSalt();
             Key key = generateKey();
+            // NOTE: SonarQube S5542 "Use a secure padding scheme" flags the line below.
+            // ALGORITHM = "AES" (see EncryptionService), so Cipher.getInstance(ALGORITHM) resolves to the
+            // JDK default transformation "AES/ECB/PKCS5Padding". This is intentionally left UNCHANGED here:
+            // this cipher encrypts data that is persisted in storage (e.g. user keys) and must stay
+            // compatible with DefaultDecryptionServiceImpl, which decrypts already-stored data using the
+            // same transformation. Switching the mode/padding (e.g. to AES/GCM) would make all
+            // previously-encrypted data undecryptable. Changing this requires a human-approved migration
+            // strategy (e.g. dual-read with a new scheme, re-encrypt existing data, etc.).
             c = Cipher.getInstance(ALGORITHM);
             c.init(Cipher.ENCRYPT_MODE, key);
         } catch (Exception e) {
@@ -98,7 +109,7 @@ public class DefaultEncryptionServiceImpl implements EncryptionService {
         String valueToEnc = null;
         String eValue = value;
         for (int i = 0; i < ITERATIONS; i++) {
-            valueToEnc = encryption_key + eValue;
+            valueToEnc = encryptionKey + eValue;
             byte[] encValue = new byte[0];
             try {
                 encValue = c.doFinal(valueToEnc.getBytes(StandardCharsets.UTF_8));
@@ -107,7 +118,7 @@ public class DefaultEncryptionServiceImpl implements EncryptionService {
                 throw new ProjectCommonException(
                         ResponseCode.SERVER_ERROR,
                         ResponseCode.SERVER_ERROR.getErrorMessage(),
-                        ResponseCode.SERVER_ERROR.getResponseCode());
+                        ResponseCode.SERVER_ERROR.getStatusCode());
             }
             eValue = new BASE64Encoder().encode(encValue);
         }
@@ -120,24 +131,24 @@ public class DefaultEncryptionServiceImpl implements EncryptionService {
 
     /** @return */
     public static String getSalt() {
-        if (!StringUtils.isBlank(encryption_key)) {
-            return encryption_key;
+        if (!StringUtils.isBlank(encryptionKey)) {
+            return encryptionKey;
         } else {
-            encryption_key = System.getenv(Constants.ENCRYPTION_KEY);
-            if (StringUtils.isBlank(encryption_key)) {
+            encryptionKey = System.getenv(Constants.ENCRYPTION_KEY);
+            if (StringUtils.isBlank(encryptionKey)) {
                 logger.info("Salt value is not provided by Env");
-                encryption_key = ProjectUtil.getConfigValue(Constants.ENCRYPTION_KEY);
+                encryptionKey = ProjectUtil.getConfigValue(Constants.ENCRYPTION_KEY);
             }
         }
-        if (StringUtils.isBlank(encryption_key)) {
+        if (StringUtils.isBlank(encryptionKey)) {
             logger.info("throwing exception for invalid salt");
             throw new ProjectCommonException(
-                    ResponseCode.invalidParameterValue,
+                    ResponseCode.INVALID_PARAMETER_VALUE,
                     String.format(
-                            ResponseCode.invalidParameterValue.getErrorMessage(), Constants.ENCRYPTION_KEY),
-                    ResponseCode.SERVER_ERROR.getResponseCode());
+                            ResponseCode.INVALID_PARAMETER_VALUE.getErrorMessage(), Constants.ENCRYPTION_KEY),
+                    ResponseCode.SERVER_ERROR.getStatusCode());
         }
-        return encryption_key;
+        return encryptionKey;
     }
 
 }

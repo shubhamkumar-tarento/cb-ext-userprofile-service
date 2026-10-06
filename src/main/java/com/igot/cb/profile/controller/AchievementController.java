@@ -4,7 +4,7 @@ import com.igot.cb.profile.service.AchievementService;
 import com.igot.cb.transactional.elasticsearch.dto.SearchCriteria;
 import com.igot.cb.util.ApiResponse;
 import com.igot.cb.util.Constants;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -14,13 +14,13 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/learner/achievement")
+@RequiredArgsConstructor
 public class AchievementController {
 
-    @Autowired
-    private AchievementService achievementService;
+    private final AchievementService achievementService;
 
     @PostMapping("/create")
-    public ResponseEntity<?> createLearnerAchievement(
+    public ResponseEntity<ApiResponse> createLearnerAchievement(
             @RequestHeader(value = Constants.X_AUTH_TOKEN, required = true) String authToken,
             @RequestHeader(value = Constants.X_AUTH_USER_ORG_ID, required = true) String rootOrgId,
             @RequestBody Map<String, Object> request){
@@ -29,7 +29,7 @@ public class AchievementController {
     }
 
     @PutMapping("/update")
-    public ResponseEntity<?> updateLearnerAchievement(
+    public ResponseEntity<ApiResponse> updateLearnerAchievement(
             @RequestHeader(value = Constants.X_AUTH_TOKEN, required = true) String authToken,
             @RequestHeader(value = Constants.X_AUTH_USER_ORG_ID, required = true) String rootOrgId,
             @RequestBody Map<String, Object> request) {
@@ -46,7 +46,7 @@ public class AchievementController {
     }
 
     @DeleteMapping("/delete")
-    public ResponseEntity<?> deleteLearnerAchievement(
+    public ResponseEntity<ApiResponse> deleteLearnerAchievement(
             @RequestHeader(value = Constants.X_AUTH_TOKEN, required = true) String authToken,
             @RequestBody Map<String, Object> request) throws Exception {
         ApiResponse response = achievementService.deleteLearnerAchievement(request, authToken);
@@ -54,7 +54,7 @@ public class AchievementController {
     }
 
     @PutMapping("/status/update")
-    public ResponseEntity<?> statusUpdateLearnerAchievement(
+    public ResponseEntity<ApiResponse> statusUpdateLearnerAchievement(
             @RequestHeader(value = Constants.X_AUTH_TOKEN, required = false) String authToken,
             @RequestBody Map<String, Object> request) {
         ApiResponse response = achievementService.statusUpdateLearnerAchievement(request, authToken);
@@ -62,7 +62,7 @@ public class AchievementController {
     }
 
     @PostMapping("/search")
-    public ResponseEntity<?> searchLearnerAchievements(
+    public ResponseEntity<ApiResponse> searchLearnerAchievements(
             @RequestHeader(value = Constants.X_AUTH_TOKEN, required = true) String authToken,
             @RequestBody SearchCriteria searchCriteria) {
         ApiResponse response = achievementService.searchLearnerAchievements(searchCriteria, authToken);
@@ -70,7 +70,7 @@ public class AchievementController {
     }
 
     @GetMapping("/list")
-    public ResponseEntity<?> listLearnerAchievementsForAdmin(
+    public ResponseEntity<ApiResponse> listLearnerAchievementsForAdmin(
             @RequestHeader(value = Constants.X_AUTH_TOKEN, required = true) String authToken,
             @RequestParam(value = Constants.ID, required = false) String id) {
         ApiResponse response = achievementService.getUserAchievements(authToken, id);
@@ -78,7 +78,7 @@ public class AchievementController {
     }
 
     @PostMapping("/v2/list")
-    public ResponseEntity<?> listLearnerAchievementsByUserIds(
+    public ResponseEntity<ApiResponse> listLearnerAchievementsByUserIds(
             @RequestHeader(value = Constants.X_AUTH_TOKEN, required = true) String authToken,
             @RequestBody Map<String, Object> request) {
         ApiResponse response = achievementService.getUserAchievementsByUserIds(authToken, request);
@@ -87,17 +87,16 @@ public class AchievementController {
 
 
     @GetMapping("/ngo/list")
-    public ResponseEntity<?> listLearnerAchievementsForNgo(
+    public ResponseEntity<ApiResponse> listLearnerAchievementsForNgo(
             @RequestHeader(value = Constants.X_AUTH_TOKEN, required = true) String authToken) {
         ApiResponse response = achievementService.getUserAchievements(authToken, "");
         return new ResponseEntity<>(response, response.getResponseCode());
     }
 
     @GetMapping("v1/list")
-    public ResponseEntity<?> listLearnerAchievementsForUser(
+    public ResponseEntity<ApiResponse> listLearnerAchievementsForUser(
             @RequestHeader(value = Constants.X_AUTH_TOKEN, required = true) String authToken) {
-        ApiResponse response = achievementService.getUserAchievements(authToken, "");
-        return new ResponseEntity<>(response, response.getResponseCode());
+        return listLearnerAchievementsForNgo(authToken);
     }
 
 }

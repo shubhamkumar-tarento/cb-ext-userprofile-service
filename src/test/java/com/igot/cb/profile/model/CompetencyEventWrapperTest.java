@@ -30,9 +30,9 @@ class CompetencyEventWrapperTest {
     class ConstructorTests {
         @Test
         void testNoArgsConstructor() {
-            CompetencyEventWrapper wrapper = new CompetencyEventWrapper();
-            assertNotNull(wrapper);
-            assertNull(wrapper.getEdata());
+            CompetencyEventWrapper localWrapper = new CompetencyEventWrapper();
+            assertNotNull(localWrapper);
+            assertNull(localWrapper.getEdata());
         }
 
         @Test
@@ -43,10 +43,10 @@ class CompetencyEventWrapperTest {
                     .contentId("content123")
                     .build();
 
-            CompetencyEventWrapper wrapper = new CompetencyEventWrapper(event);
-            assertNotNull(wrapper);
-            assertNotNull(wrapper.getEdata());
-            assertEquals("user123", wrapper.getEdata().getUserId());
+            CompetencyEventWrapper localWrapper = new CompetencyEventWrapper(event);
+            assertNotNull(localWrapper);
+            assertNotNull(localWrapper.getEdata());
+            assertEquals("user123", localWrapper.getEdata().getUserId());
         }
     }
 
@@ -60,23 +60,23 @@ class CompetencyEventWrapperTest {
                     .userId("user123")
                     .build();
 
-            CompetencyEventWrapper wrapper = CompetencyEventWrapper.builder()
+            CompetencyEventWrapper localWrapper = CompetencyEventWrapper.builder()
                     .edata(event)
                     .build();
 
-            assertNotNull(wrapper);
-            assertNotNull(wrapper.getEdata());
-            assertEquals("user123", wrapper.getEdata().getUserId());
+            assertNotNull(localWrapper);
+            assertNotNull(localWrapper.getEdata());
+            assertEquals("user123", localWrapper.getEdata().getUserId());
         }
 
         @Test
         void testBuilderWithNull() {
-            CompetencyEventWrapper wrapper = CompetencyEventWrapper.builder()
+            CompetencyEventWrapper localWrapper = CompetencyEventWrapper.builder()
                     .edata(null)
                     .build();
 
-            assertNotNull(wrapper);
-            assertNull(wrapper.getEdata());
+            assertNotNull(localWrapper);
+            assertNull(localWrapper.getEdata());
         }
     }
 
@@ -124,11 +124,11 @@ class CompetencyEventWrapperTest {
                     .competencyIds(competencies)
                     .build();
 
-            CompetencyEventWrapper wrapper = CompetencyEventWrapper.builder()
+            CompetencyEventWrapper localWrapper = CompetencyEventWrapper.builder()
                     .edata(event)
                     .build();
 
-            String json = objectMapper.writeValueAsString(wrapper);
+            String json = objectMapper.writeValueAsString(localWrapper);
 
             assertTrue(json.contains("\"edata\""));
             assertTrue(json.contains("\"eventType\":\"COMPETENCY_ACQUIRED\""));
@@ -143,17 +143,17 @@ class CompetencyEventWrapperTest {
                     "\"action\":\"CREATE\",\"competencyIds\":[{\"competencyAreaId\":\"area1\"," +
                     "\"competencyThemeId\":\"theme1\",\"competencySubThemeId\":\"subtheme1\"}]}}";
 
-            CompetencyEventWrapper wrapper = objectMapper.readValue(json, CompetencyEventWrapper.class);
+            CompetencyEventWrapper localWrapper = objectMapper.readValue(json, CompetencyEventWrapper.class);
 
-            assertNotNull(wrapper);
-            assertNotNull(wrapper.getEdata());
-            assertEquals("COMPETENCY_ACQUIRED", wrapper.getEdata().getEventType());
-            assertEquals("user123", wrapper.getEdata().getUserId());
-            assertEquals("content123", wrapper.getEdata().getContentId());
-            assertEquals("achievements", wrapper.getEdata().getContextType());
-            assertEquals("CREATE", wrapper.getEdata().getAction());
-            assertNotNull(wrapper.getEdata().getCompetencyIds());
-            assertEquals(1, wrapper.getEdata().getCompetencyIds().size());
+            assertNotNull(localWrapper);
+            assertNotNull(localWrapper.getEdata());
+            assertEquals("COMPETENCY_ACQUIRED", localWrapper.getEdata().getEventType());
+            assertEquals("user123", localWrapper.getEdata().getUserId());
+            assertEquals("content123", localWrapper.getEdata().getContentId());
+            assertEquals("achievements", localWrapper.getEdata().getContextType());
+            assertEquals("CREATE", localWrapper.getEdata().getAction());
+            assertNotNull(localWrapper.getEdata().getCompetencyIds());
+            assertEquals(1, localWrapper.getEdata().getCompetencyIds().size());
         }
 
         @Test
@@ -168,11 +168,11 @@ class CompetencyEventWrapperTest {
                     .competencyIds(null)
                     .build();
 
-            CompetencyEventWrapper wrapper = CompetencyEventWrapper.builder()
+            CompetencyEventWrapper localWrapper = CompetencyEventWrapper.builder()
                     .edata(event)
                     .build();
 
-            String json = objectMapper.writeValueAsString(wrapper);
+            String json = objectMapper.writeValueAsString(localWrapper);
 
             assertTrue(json.contains("\"edata\""));
             assertTrue(json.contains("\"userId\":\"user123\""));
@@ -182,10 +182,10 @@ class CompetencyEventWrapperTest {
         void testDeserialization_withNullEdata() throws Exception {
             String json = "{\"edata\":null}";
 
-            CompetencyEventWrapper wrapper = objectMapper.readValue(json, CompetencyEventWrapper.class);
+            CompetencyEventWrapper localWrapper = objectMapper.readValue(json, CompetencyEventWrapper.class);
 
-            assertNotNull(wrapper);
-            assertNull(wrapper.getEdata());
+            assertNotNull(localWrapper);
+            assertNull(localWrapper.getEdata());
         }
 
         @Test
@@ -200,11 +200,11 @@ class CompetencyEventWrapperTest {
                     .competencyIds(null)
                     .build();
 
-            CompetencyEventWrapper wrapper = CompetencyEventWrapper.builder()
+            CompetencyEventWrapper localWrapper = CompetencyEventWrapper.builder()
                     .edata(event)
                     .build();
 
-            String json = objectMapper.writeValueAsString(wrapper);
+            String json = objectMapper.writeValueAsString(localWrapper);
 
             assertTrue(json.contains("\"edata\":{"));
             assertTrue(json.contains("\"eventType\":\"COMPETENCY_ACQUIRED\""));
@@ -238,11 +238,11 @@ class CompetencyEventWrapperTest {
                     .competencyIds(competencies)
                     .build();
 
-            CompetencyEventWrapper wrapper = CompetencyEventWrapper.builder()
+            CompetencyEventWrapper localWrapper = CompetencyEventWrapper.builder()
                     .edata(event)
                     .build();
 
-            String json = objectMapper.writeValueAsString(wrapper);
+            String json = objectMapper.writeValueAsString(localWrapper);
 
             assertTrue(json.contains("\"edata\":{"));
             assertTrue(json.contains("\"action\":\"UPDATE\""));
@@ -268,11 +268,11 @@ class CompetencyEventWrapperTest {
                     .competencyIds(competencies)
                     .build();
 
-            CompetencyEventWrapper wrapper = CompetencyEventWrapper.builder()
+            CompetencyEventWrapper localWrapper = CompetencyEventWrapper.builder()
                     .edata(event)
                     .build();
 
-            String json = objectMapper.writeValueAsString(wrapper);
+            String json = objectMapper.writeValueAsString(localWrapper);
 
             assertTrue(json.contains("\"edata\":{"));
             assertTrue(json.contains("\"action\":\"DELETE\""));
@@ -285,17 +285,17 @@ class CompetencyEventWrapperTest {
     class EqualsHashCodeTests {
         @Test
         void testEquals_sameObject() {
-            assertTrue(wrapper.equals(wrapper));
+            assertEquals(wrapper, wrapper);
         }
 
         @Test
         void testEquals_nullObject() {
-            assertFalse(wrapper.equals(null));
+            assertNotEquals(null, wrapper);
         }
 
         @Test
         void testEquals_differentClass() {
-            assertFalse(wrapper.equals("string"));
+            assertNotEquals("string", wrapper);
         }
 
         @Test
@@ -351,19 +351,19 @@ class CompetencyEventWrapperTest {
                     .userId("user123")
                     .build();
 
-            CompetencyEventWrapper wrapper = CompetencyEventWrapper.builder()
+            CompetencyEventWrapper localWrapper = CompetencyEventWrapper.builder()
                     .edata(event)
                     .build();
 
-            String toString = wrapper.toString();
+            String toString = localWrapper.toString();
             assertNotNull(toString);
             assertTrue(toString.contains("CompetencyEventWrapper"));
         }
 
         @Test
         void testToString_withNull() {
-            CompetencyEventWrapper wrapper = new CompetencyEventWrapper();
-            String toString = wrapper.toString();
+            CompetencyEventWrapper localWrapper = new CompetencyEventWrapper();
+            String toString = localWrapper.toString();
             assertNotNull(toString);
         }
     }
@@ -374,12 +374,12 @@ class CompetencyEventWrapperTest {
         @Test
         void testWrapper_withEmptyEvent() {
             CompetencyAcquiredEvent event = new CompetencyAcquiredEvent();
-            CompetencyEventWrapper wrapper = CompetencyEventWrapper.builder()
+            CompetencyEventWrapper localWrapper = CompetencyEventWrapper.builder()
                     .edata(event)
                     .build();
 
-            assertNotNull(wrapper);
-            assertNotNull(wrapper.getEdata());
+            assertNotNull(localWrapper);
+            assertNotNull(localWrapper.getEdata());
         }
 
         @Test
@@ -388,14 +388,14 @@ class CompetencyEventWrapperTest {
                     .userId("user123")
                     .build();
 
-            CompetencyEventWrapper wrapper = CompetencyEventWrapper.builder()
+            CompetencyEventWrapper localWrapper = CompetencyEventWrapper.builder()
                     .edata(event)
                     .build();
 
-            assertNotNull(wrapper);
-            assertNotNull(wrapper.getEdata());
-            assertEquals("user123", wrapper.getEdata().getUserId());
-            assertNull(wrapper.getEdata().getEventType());
+            assertNotNull(localWrapper);
+            assertNotNull(localWrapper.getEdata());
+            assertEquals("user123", localWrapper.getEdata().getUserId());
+            assertNull(localWrapper.getEdata().getEventType());
         }
 
         @Test
@@ -404,14 +404,14 @@ class CompetencyEventWrapperTest {
                     .userId("user123")
                     .build();
 
-            CompetencyEventWrapper wrapper = CompetencyEventWrapper.builder()
+            CompetencyEventWrapper localWrapper = CompetencyEventWrapper.builder()
                     .edata(event)
                     .build();
 
             // Modify event after wrapping
-            wrapper.getEdata().setUserId("user456");
+            localWrapper.getEdata().setUserId("user456");
 
-            assertEquals("user456", wrapper.getEdata().getUserId());
+            assertEquals("user456", localWrapper.getEdata().getUserId());
         }
     }
 }

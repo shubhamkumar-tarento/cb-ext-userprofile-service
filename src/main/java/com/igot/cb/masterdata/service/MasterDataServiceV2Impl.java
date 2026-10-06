@@ -37,7 +37,7 @@ import java.util.Optional;
 @Service
 public class MasterDataServiceV2Impl implements MasterDataServiceV2 {
 
-    public static final Logger logger = LoggerFactory.getLogger(MasterDataServiceImpl.class);
+    public static final Logger logger = LoggerFactory.getLogger(MasterDataServiceV2Impl.class);
     private final DegreeRepository degreeRepository;
     private final InstituteRepository instituteRepository;
     private final ValidationService validationService;
@@ -123,60 +123,68 @@ public class MasterDataServiceV2Impl implements MasterDataServiceV2 {
             Object idObj = req.get(Constants.ID);
             // CASE 1: UPDATE (ID is present)
             if (ObjectUtils.isNotEmpty(idObj)) {
-                Long id = Long.valueOf(idObj.toString());
-                Optional<Degree> existingById = degreeRepository.findById(id);
-                if (existingById.isEmpty()) {
-                    ProjectUtil.errorResponse(apiResponse, "Degree with given ID not found", HttpStatus.NOT_FOUND);
-                    return apiResponse;
-                }
-                Degree existing = existingById.get();
-                // Update fields
-                if (StringUtils.isNotBlank(degree.getName())) {
-                    Optional<Degree> duplicate = degreeRepository.findByNameIgnoreCase(degree.getName());
-                    if (duplicate.isPresent() && !duplicate.get().getId().equals(id)) {
-                        ProjectUtil.errorResponse(apiResponse, "Degree already exists with the name: " + degree.getName(), HttpStatus.CONFLICT);
-                        return apiResponse;
-                    }
-                    existing.setName(degree.getName());
-                }
-                if (StringUtils.isNotBlank(degree.getDescription())) {
-                    existing.setDescription(degree.getDescription());
-                }
-                if (degree.getStatus() != null) {
-                    existing.setStatus(degree.getStatus());
-                }
-                existing.setUpdatedOn(LocalDateTime.now());
-                Degree updated = degreeRepository.save(existing);
-                EsResponse esResponse = esUtilService.saveObjectInIgotES(updated, serverProperties.getEsDegreeIndexName(), serverProperties.getEsMasterDataIndexDocType(), updated.getId().toString());
-                if (!esResponse.isSuccess()) {
-                    logger.error("Failed to update institute in ES: {}", esResponse.getMessage());
-                }
-                apiResponse.getResult().put(Constants.RESULT, updated);
-                return apiResponse;
+                return updateDegree(apiResponse, degree, idObj);
             }
             // CASE 2: CREATE (ID is missing)
-            Optional<Degree> existingByName = degreeRepository.findByNameIgnoreCase(degree.getName());
-            if (existingByName.isPresent()) {
-                ProjectUtil.errorResponse(apiResponse, "Degree already exists with the name: " + degree.getName(), HttpStatus.CONFLICT);
-                return apiResponse;
-            }
-            // Create new
-            degree.setStatus(1);
-            Degree saved = degreeRepository.save(degree);
-            EsResponse esResponse = esUtilService.saveObjectInIgotES(saved, serverProperties.getEsDegreeIndexName(), serverProperties.getEsMasterDataIndexDocType(), saved.getId().toString());
-            if (!esResponse.isSuccess()) {
-                degreeRepository.delete(saved);
-                ProjectUtil.errorResponse(apiResponse, "Failed to add degree (ES indexing failed)", HttpStatus.INTERNAL_SERVER_ERROR);
-                return apiResponse;
-            }
-            apiResponse.getResult().put(Constants.RESULT, saved);
-            return apiResponse;
+            return createDegree(apiResponse, degree);
 
         } catch (Exception e) {
             logger.error("Unexpected error in upsertDegree", e);
             ProjectUtil.errorResponse(apiResponse, "Unexpected error while adding/updating degree", HttpStatus.INTERNAL_SERVER_ERROR);
             return apiResponse;
         }
+    }
+
+    private ApiResponse updateDegree(ApiResponse apiResponse, Degree degree, Object idObj) {
+        Long id = Long.valueOf(idObj.toString());
+        Optional<Degree> existingById = degreeRepository.findById(id);
+        if (existingById.isEmpty()) {
+            ProjectUtil.errorResponse(apiResponse, "Degree with given ID not found", HttpStatus.NOT_FOUND);
+            return apiResponse;
+        }
+        Degree existing = existingById.get();
+        // Update fields
+        if (StringUtils.isNotBlank(degree.getName())) {
+            Optional<Degree> duplicate = degreeRepository.findByNameIgnoreCase(degree.getName());
+            if (duplicate.isPresent() && !duplicate.get().getId().equals(id)) {
+                ProjectUtil.errorResponse(apiResponse, "Degree already exists with the name: " + degree.getName(), HttpStatus.CONFLICT);
+                return apiResponse;
+            }
+            existing.setName(degree.getName());
+        }
+        if (StringUtils.isNotBlank(degree.getDescription())) {
+            existing.setDescription(degree.getDescription());
+        }
+        if (degree.getStatus() != null) {
+            existing.setStatus(degree.getStatus());
+        }
+        existing.setUpdatedOn(LocalDateTime.now());
+        Degree updated = degreeRepository.save(existing);
+        EsResponse esResponse = esUtilService.saveObjectInIgotES(updated, serverProperties.getEsDegreeIndexName(), serverProperties.getEsMasterDataIndexDocType(), updated.getId().toString());
+        if (!esResponse.isSuccess()) {
+            logger.error("Failed to update institute in ES: {}", esResponse.getMessage());
+        }
+        apiResponse.getResult().put(Constants.RESULT, updated);
+        return apiResponse;
+    }
+
+    private ApiResponse createDegree(ApiResponse apiResponse, Degree degree) {
+        Optional<Degree> existingByName = degreeRepository.findByNameIgnoreCase(degree.getName());
+        if (existingByName.isPresent()) {
+            ProjectUtil.errorResponse(apiResponse, "Degree already exists with the name: " + degree.getName(), HttpStatus.CONFLICT);
+            return apiResponse;
+        }
+        // Create new
+        degree.setStatus(1);
+        Degree saved = degreeRepository.save(degree);
+        EsResponse esResponse = esUtilService.saveObjectInIgotES(saved, serverProperties.getEsDegreeIndexName(), serverProperties.getEsMasterDataIndexDocType(), saved.getId().toString());
+        if (!esResponse.isSuccess()) {
+            degreeRepository.delete(saved);
+            ProjectUtil.errorResponse(apiResponse, "Failed to add degree (ES indexing failed)", HttpStatus.INTERNAL_SERVER_ERROR);
+            return apiResponse;
+        }
+        apiResponse.getResult().put(Constants.RESULT, saved);
+        return apiResponse;
     }
 
     private Degree mapRequestToDegree(Map<String, Object> requestBody) {
@@ -201,72 +209,80 @@ public class MasterDataServiceV2Impl implements MasterDataServiceV2 {
             Object idObj = req.get(Constants.ID);
             // CASE 1: UPDATE (ID PRESENT)
             if (ObjectUtils.isNotEmpty(idObj)) {
-                Long id = Long.parseLong(idObj.toString());
-                Optional<Institute> dbOpt = instituteRepository.findById(id);
-                if (dbOpt.isEmpty()) {
-                    ProjectUtil.errorResponse(apiResponse, "Institute with given ID not found", HttpStatus.NOT_FOUND);
-                    return apiResponse;
-                }
-                Institute existing = dbOpt.get();
-                // Update allowed fields
-                if (StringUtils.isNotBlank(institute.getName())) {
-                    Optional<Institute> duplicate = instituteRepository.findByNameIgnoreCase(institute.getName());
-                    if (duplicate.isPresent() && !duplicate.get().getId().equals(id)) {
-                        ProjectUtil.errorResponse(apiResponse, "Institute already exists with the name: " + institute.getName(), HttpStatus.CONFLICT);
-                        return apiResponse;
-                    }
-                    existing.setName(institute.getName());
-                }
-                if (StringUtils.isNotBlank(institute.getDescription())) {
-                    existing.setDescription(institute.getDescription());
-                }
-                if (institute.getStatus() != null) {
-                    existing.setStatus(institute.getStatus());
-                }
-                existing.setUpdatedOn(LocalDateTime.now());
-                // Save Postgres
-                Institute updated = instituteRepository.save(existing);
-                // Save ES
-                EsResponse esResponse = esUtilService.saveObjectInIgotES(
-                        updated,
-                        serverProperties.getEsInstituteIndexName(),
-                        serverProperties.getEsMasterDataIndexDocType(),
-                        updated.getId().toString());
-
-                if (!esResponse.isSuccess()) {
-                    logger.error("Failed to update institute in ES: {}", esResponse.getMessage());
-                }
-                apiResponse.getResult().put(Constants.RESULT, updated);
-                return apiResponse;
+                return updateInstitute(apiResponse, institute, idObj);
             }
             // CASE 2: CREATE NEW (ID NOT PRESENT)
-            Optional<Institute> existingByName = instituteRepository.findByNameIgnoreCase(institute.getName());
-            if (existingByName.isPresent()) {
-                ProjectUtil.errorResponse(apiResponse, "Institute already exists with the name: " + institute.getName(), HttpStatus.CONFLICT);
-                return apiResponse;
-            }
-            institute.setStatus(1);
-            Institute saved = instituteRepository.save(institute);
-            // Save ES
-            EsResponse esResponse = esUtilService.saveObjectInIgotES(
-                    saved,
-                    serverProperties.getEsInstituteIndexName(),
-                    serverProperties.getEsMasterDataIndexDocType(),
-                    saved.getId().toString());
-
-            if (!esResponse.isSuccess()) {
-                logger.error("Failed to index institute in ES: {} — Rolling back DB", esResponse.getMessage());
-                instituteRepository.delete(saved);
-                ProjectUtil.errorResponse(apiResponse, "Failed to add institute (ES indexing failed)", HttpStatus.INTERNAL_SERVER_ERROR);
-                return apiResponse;
-            }
-            apiResponse.getResult().put(Constants.RESULT, saved);
-            return apiResponse;
+            return createInstitute(apiResponse, institute);
         } catch (Exception e) {
             logger.error("Unexpected error while adding/updating institute", e);
             ProjectUtil.errorResponse(apiResponse, "Unexpected error while adding/updating institute", HttpStatus.INTERNAL_SERVER_ERROR);
             return apiResponse;
         }
+    }
+
+    private ApiResponse updateInstitute(ApiResponse apiResponse, Institute institute, Object idObj) {
+        Long id = Long.parseLong(idObj.toString());
+        Optional<Institute> dbOpt = instituteRepository.findById(id);
+        if (dbOpt.isEmpty()) {
+            ProjectUtil.errorResponse(apiResponse, "Institute with given ID not found", HttpStatus.NOT_FOUND);
+            return apiResponse;
+        }
+        Institute existing = dbOpt.get();
+        // Update allowed fields
+        if (StringUtils.isNotBlank(institute.getName())) {
+            Optional<Institute> duplicate = instituteRepository.findByNameIgnoreCase(institute.getName());
+            if (duplicate.isPresent() && !duplicate.get().getId().equals(id)) {
+                ProjectUtil.errorResponse(apiResponse, "Institute already exists with the name: " + institute.getName(), HttpStatus.CONFLICT);
+                return apiResponse;
+            }
+            existing.setName(institute.getName());
+        }
+        if (StringUtils.isNotBlank(institute.getDescription())) {
+            existing.setDescription(institute.getDescription());
+        }
+        if (institute.getStatus() != null) {
+            existing.setStatus(institute.getStatus());
+        }
+        existing.setUpdatedOn(LocalDateTime.now());
+        // Save Postgres
+        Institute updated = instituteRepository.save(existing);
+        // Save ES
+        EsResponse esResponse = esUtilService.saveObjectInIgotES(
+                updated,
+                serverProperties.getEsInstituteIndexName(),
+                serverProperties.getEsMasterDataIndexDocType(),
+                updated.getId().toString());
+
+        if (!esResponse.isSuccess()) {
+            logger.error("Failed to update institute in ES: {}", esResponse.getMessage());
+        }
+        apiResponse.getResult().put(Constants.RESULT, updated);
+        return apiResponse;
+    }
+
+    private ApiResponse createInstitute(ApiResponse apiResponse, Institute institute) {
+        Optional<Institute> existingByName = instituteRepository.findByNameIgnoreCase(institute.getName());
+        if (existingByName.isPresent()) {
+            ProjectUtil.errorResponse(apiResponse, "Institute already exists with the name: " + institute.getName(), HttpStatus.CONFLICT);
+            return apiResponse;
+        }
+        institute.setStatus(1);
+        Institute saved = instituteRepository.save(institute);
+        // Save ES
+        EsResponse esResponse = esUtilService.saveObjectInIgotES(
+                saved,
+                serverProperties.getEsInstituteIndexName(),
+                serverProperties.getEsMasterDataIndexDocType(),
+                saved.getId().toString());
+
+        if (!esResponse.isSuccess()) {
+            logger.error("Failed to index institute in ES: {} — Rolling back DB", esResponse.getMessage());
+            instituteRepository.delete(saved);
+            ProjectUtil.errorResponse(apiResponse, "Failed to add institute (ES indexing failed)", HttpStatus.INTERNAL_SERVER_ERROR);
+            return apiResponse;
+        }
+        apiResponse.getResult().put(Constants.RESULT, saved);
+        return apiResponse;
     }
 
     private Institute mapRequestToInstitute(Map<String, Object> requestBody) {
@@ -291,73 +307,19 @@ public class MasterDataServiceV2Impl implements MasterDataServiceV2 {
                     .from(from)
                     .size(size);
 
-            String sortBy = String.valueOf(searchRequest.getOrDefault(Constants.SORT_BY, "")).trim();
             String keyword = String.valueOf(searchRequest.getOrDefault(Constants.SEARCH_STRING, "")).trim();
-            if (!sortBy.isEmpty()) {
-                if (Constants.NAME.equals(sortBy)) {
-                    sortBy = Constants.NAME_KEYWORD;
-                } else if (Constants.DESCRIPTION.equals(sortBy)) {
-                    sortBy = Constants.DESCRIPTION_KEYWORD;
-                }
-                SortOrder sortOrder = "DESC".equalsIgnoreCase(
-                        String.valueOf(searchRequest.getOrDefault(Constants.ORDER_BY, "ASC"))
-                ) ? SortOrder.DESC : SortOrder.ASC;
-
-                if (!keyword.isEmpty()) {
-                    //Relevance first
-                    source.sort("_score", SortOrder.DESC);
-                    //Secondary sort
-                    source.sort(sortBy, sortOrder);
-                } else {
-                    //No search, pure sorting
-                    source.sort(sortBy, sortOrder);
-                }
-            }
+            applySorting(searchRequest, source, keyword);
 
             // Build ES request
             SearchRequest esSearch = new SearchRequest(indexName).types(docType);
             BoolQueryBuilder bool = QueryBuilders.boolQuery();
 
             // ----------- SEARCH STRING (optional) -----------
-            if (!keyword.isEmpty()) {
-
-                BoolQueryBuilder relevanceQuery = QueryBuilders.boolQuery()
-                        // Exact match (highest priority)
-                        .should(QueryBuilders.termQuery(Constants.NAME_KEYWORD, keyword).boost(10f))
-                        // Exact phrase match
-                        .should(QueryBuilders.matchPhraseQuery(Constants.NAME, keyword).boost(6f))
-                        // Partial matches
-                        .should(QueryBuilders.matchQuery(Constants.NAME, keyword).boost(4f))
-                        .should(QueryBuilders.matchQuery(Constants.DESCRIPTION, keyword).boost(2f))
-                        // Ngram fallback
-                        .should(QueryBuilders.matchQuery(Constants.NAME+".ngram", keyword).boost(1f))
-                        .should(QueryBuilders.matchQuery(Constants.DESCRIPTION+".ngram", keyword).boost(0.5f))
-                        .minimumShouldMatch(1);
-                bool.must(relevanceQuery);
-            } else {
-                bool.must(QueryBuilders.matchAllQuery());
-            }
+            bool.must(buildKeywordQuery(keyword));
 
             // ----------- EXACT MATCH FILTERS -----------
-            Object filtersObj = searchRequest.get(Constants.FILTERS);
-            Map<String, Object> filters = filtersObj instanceof Map ? (Map<String, Object>) filtersObj : null;
-            if (MapUtils.isNotEmpty(filters)) {
-                if (ObjectUtils.isNotEmpty(filters.get(Constants.ID))) {
-                    bool.filter(QueryBuilders.termQuery(Constants.ID, filters.get(Constants.ID)));
-                }
-                if (ObjectUtils.isNotEmpty(filters.get(Constants.NAME))) {
-                    bool.filter(QueryBuilders.termQuery(Constants.NAME_KEYWORD, filters.get(Constants.NAME)));
-                }
-                if (ObjectUtils.isNotEmpty(filters.get(Constants.STATUS))) {
-                    Object statObj = filters.get(Constants.STATUS);
-                    int stat = (statObj instanceof Number n)
-                            ? n.intValue()
-                            : Integer.parseInt(statObj.toString());
-                    bool.filter(QueryBuilders.termQuery(Constants.STATUS, stat));
-                }
-            } else {
-                bool.filter(QueryBuilders.termQuery(Constants.STATUS, 1));
-            }
+            applyFilters(searchRequest, bool);
+
             source.query(bool);
             esSearch.source(source);
             SearchResponse response = igotESClient.search(esSearch, RequestOptions.DEFAULT);
@@ -376,6 +338,65 @@ public class MasterDataServiceV2Impl implements MasterDataServiceV2 {
                     .success(false)
                     .message("Search failed: " + e.getMessage())
                     .build();
+        }
+    }
+
+    private void applySorting(Map<String, Object> searchRequest, SearchSourceBuilder source, String keyword) {
+        String sortBy = String.valueOf(searchRequest.getOrDefault(Constants.SORT_BY, "")).trim();
+        if (sortBy.isEmpty()) {
+            return;
+        }
+        if (Constants.NAME.equals(sortBy)) {
+            sortBy = Constants.NAME_KEYWORD;
+        } else if (Constants.DESCRIPTION.equals(sortBy)) {
+            sortBy = Constants.DESCRIPTION_KEYWORD;
+        }
+        SortOrder sortOrder = "DESC".equalsIgnoreCase(
+                String.valueOf(searchRequest.getOrDefault(Constants.ORDER_BY, "ASC"))
+        ) ? SortOrder.DESC : SortOrder.ASC;
+
+        if (!keyword.isEmpty()) {
+            //Relevance first
+            source.sort("_score", SortOrder.DESC);
+        }
+        //Secondary sort (or pure sorting when there's no search keyword)
+        source.sort(sortBy, sortOrder);
+    }
+
+    private org.elasticsearch.index.query.QueryBuilder buildKeywordQuery(String keyword) {
+        if (keyword.isEmpty()) {
+            return QueryBuilders.matchAllQuery();
+        }
+        // Exact match (highest priority), exact phrase match, partial matches, ngram fallback
+        return QueryBuilders.boolQuery()
+                .should(QueryBuilders.termQuery(Constants.NAME_KEYWORD, keyword).boost(10f))
+                .should(QueryBuilders.matchPhraseQuery(Constants.NAME, keyword).boost(6f))
+                .should(QueryBuilders.matchQuery(Constants.NAME, keyword).boost(4f))
+                .should(QueryBuilders.matchQuery(Constants.DESCRIPTION, keyword).boost(2f))
+                .should(QueryBuilders.matchQuery(Constants.NAME + ".ngram", keyword).boost(1f))
+                .should(QueryBuilders.matchQuery(Constants.DESCRIPTION + ".ngram", keyword).boost(0.5f))
+                .minimumShouldMatch(1);
+    }
+
+    private void applyFilters(Map<String, Object> searchRequest, BoolQueryBuilder bool) {
+        Object filtersObj = searchRequest.get(Constants.FILTERS);
+        Map<String, Object> filters = filtersObj instanceof Map ? (Map<String, Object>) filtersObj : null;
+        if (MapUtils.isEmpty(filters)) {
+            bool.filter(QueryBuilders.termQuery(Constants.STATUS, 1));
+            return;
+        }
+        if (ObjectUtils.isNotEmpty(filters.get(Constants.ID))) {
+            bool.filter(QueryBuilders.termQuery(Constants.ID, filters.get(Constants.ID)));
+        }
+        if (ObjectUtils.isNotEmpty(filters.get(Constants.NAME))) {
+            bool.filter(QueryBuilders.termQuery(Constants.NAME_KEYWORD, filters.get(Constants.NAME)));
+        }
+        if (ObjectUtils.isNotEmpty(filters.get(Constants.STATUS))) {
+            Object statObj = filters.get(Constants.STATUS);
+            int stat = (statObj instanceof Number n)
+                    ? n.intValue()
+                    : Integer.parseInt(statObj.toString());
+            bool.filter(QueryBuilders.termQuery(Constants.STATUS, stat));
         }
     }
 }

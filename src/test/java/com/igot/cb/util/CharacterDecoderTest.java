@@ -11,9 +11,6 @@ import java.nio.ByteBuffer;
 public class CharacterDecoderTest {
 
     private static class TestDecoder extends CharacterDecoder {
-        private boolean prefixCalled = false;
-        private boolean suffixCalled = false;
-        private boolean linePrefixCalled = false;
         private boolean lineSuffixCalled = false;
         private int atomCalls = 0;
 
@@ -30,19 +27,16 @@ public class CharacterDecoderTest {
         @Override
         protected void decodeBufferPrefix(PushbackInputStream aStream, OutputStream bStream)
                 throws IOException {
-            prefixCalled = true;
         }
 
         @Override
         protected void decodeBufferSuffix(PushbackInputStream aStream, OutputStream bStream)
                 throws IOException {
-            suffixCalled = true;
         }
 
         @Override
         protected int decodeLinePrefix(PushbackInputStream aStream, OutputStream bStream)
                 throws IOException {
-            linePrefixCalled = true;
             return super.decodeLinePrefix(aStream, bStream);
         }
 
@@ -65,9 +59,6 @@ public class CharacterDecoderTest {
         }
 
         public void reset() {
-            prefixCalled = false;
-            suffixCalled = false;
-            linePrefixCalled = false;
             lineSuffixCalled = false;
             atomCalls = 0;
         }

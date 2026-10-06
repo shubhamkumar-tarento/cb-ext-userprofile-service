@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
 import java.security.PublicKey;
 import java.security.spec.X509EncodedKeySpec;
@@ -11,12 +12,13 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
 import com.igot.cb.authentication.model.KeyData;
+import com.igot.cb.exceptions.CustomException;
 import com.igot.cb.util.Constants;
 import com.igot.cb.util.PropertiesCache;
 
@@ -42,7 +44,7 @@ public class KeyManager {
     String basePath = propertiesCache.getProperty(Constants.ACCESS_TOKEN_PUBLICKEY_BASEPATH);
     try (Stream<Path> walk = Files.walk(Paths.get(basePath))) {
       List<String> result =
-              walk.filter(Files::isRegularFile).map(Path::toString).collect(Collectors.toList());
+              walk.filter(Files::isRegularFile).map(Path::toString).toList();
       result.forEach(file -> {
         try {
           Path path = Paths.get(file);
@@ -70,18 +72,22 @@ public class KeyManager {
    *
    * @param key The string representation of the public key
    * @return The loaded public key
-   * @throws Exception If there's an error during the loading process
+   * @throws CustomException If there's an error during the loading process
    */
-  public static PublicKey loadPublicKey(String key) throws Exception {
+  public static PublicKey loadPublicKey(String key) {
     // Remove header and footer from the key string
     String cleanedKey = key.replaceAll("(-+BEGIN PUBLIC KEY-+)", "")
             .replaceAll("(-+END PUBLIC KEY-+)", "")
             .replaceAll("[\\r\\n]+", "");
-    // Decode Base64 content
-    byte[] keyBytes = Base64.getDecoder().decode(cleanedKey);
-    // Generate PublicKey object
-    X509EncodedKeySpec spec = new X509EncodedKeySpec(keyBytes);
-    KeyFactory keyFactory = KeyFactory.getInstance("RSA");
-    return keyFactory.generatePublic(spec);
+    try {
+      // Decode Base64 content
+      byte[] keyBytes = Base64.getDecoder().decode(cleanedKey);
+      // Generate PublicKey object
+      X509EncodedKeySpec spec = new X509EncodedKeySpec(keyBytes);
+      KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+      return keyFactory.generatePublic(spec);
+    } catch (IllegalArgumentException | GeneralSecurityException e) {
+      throw new CustomException("KEY_LOAD_ERROR", "Error loading public key: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+    }
   }
 }

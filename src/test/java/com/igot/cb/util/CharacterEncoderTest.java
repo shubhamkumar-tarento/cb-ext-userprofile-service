@@ -32,7 +32,7 @@ public class CharacterEncoderTest {
     private final TestEncoder encoder = new TestEncoder();
 
     @Test
-    public void testEncodeBasic() throws IOException {
+    public void testEncodeBasic() {
         byte[] input = "Hello".getBytes();
         String result = encoder.encode(input);
         assertNotNull(result);
@@ -47,7 +47,7 @@ public class CharacterEncoderTest {
     }
 
     @Test
-    public void testEncodeBuffer() throws IOException {
+    public void testEncodeBuffer() {
         byte[] input = "Buffer".getBytes();
         String result = encoder.encodeBuffer(input);
         assertNotNull(result);
@@ -76,7 +76,7 @@ public class CharacterEncoderTest {
     }
 
     @Test
-    public void testEncodeEmptyInput() throws IOException {
+    public void testEncodeEmptyInput() {
         byte[] input = new byte[0];
         String result = encoder.encode(input);
         assertNotNull(result);
@@ -113,7 +113,7 @@ public class CharacterEncoderTest {
         encoder.encodeBuffer(buffer, outStream);
         String result = outStream.toString();
         assertNotNull(result);
-        assertTrue(result.length() > 0);
+        assertFalse(result.isEmpty());
     }
 
     @Test
@@ -126,7 +126,7 @@ public class CharacterEncoderTest {
         encoder.encodeBuffer(buffer, outStream);
         String result = outStream.toString();
         assertNotNull(result);
-        assertTrue(result.length() > 0);
+        assertFalse(result.isEmpty());
     }
 
     @Test
@@ -138,7 +138,7 @@ public class CharacterEncoderTest {
         encoder.encodeBuffer(buffer, outStream);
         String result = outStream.toString();
         assertNotNull(result);
-        assertTrue(result.length() > 0);
+        assertFalse(result.isEmpty());
     }
 
     @Test(expected = NullPointerException.class)
@@ -197,7 +197,7 @@ public class CharacterEncoderTest {
         // Verify output was generated
         String result = outStream.toString();
         assertNotNull(result);
-        assertTrue(result.length() > 0);
+        assertFalse(result.isEmpty());
     }
 
     @Test

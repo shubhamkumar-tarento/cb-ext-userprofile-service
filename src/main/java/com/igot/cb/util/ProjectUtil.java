@@ -7,7 +7,6 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
@@ -16,6 +15,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.igot.cb.exceptions.CustomException;
 import com.igot.cb.exceptions.ResponseCode;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -25,21 +25,17 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Component
 @Slf4j
+@RequiredArgsConstructor
 public class ProjectUtil {
 
-    public static PropertiesCache propertiesCache;
+    private static final PropertiesCache propertiesCache = PropertiesCache.getInstance();
 
-    static {
-        propertiesCache = PropertiesCache.getInstance();
-    }
+    private final ObjectMapper mapper;
 
-    @Autowired
-    private ObjectMapper mapper;
-
-    TypeReference<List<Map<String, Object>>> LIST_OF_MAP_TYPE = new TypeReference<List<Map<String, Object>>>() {
+    TypeReference<List<Map<String, Object>>> listOfMapType = new TypeReference<List<Map<String, Object>>>() {
     };
 
-    TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<Map<String, Object>>() {
+    TypeReference<Map<String, Object>> mapType = new TypeReference<Map<String, Object>>() {
     };
 
     /**
@@ -50,12 +46,12 @@ public class ProjectUtil {
      */
     public static CustomException createServerError(ResponseCode responseCode) {
         return new CustomException(responseCode.getErrorCode(), responseCode.getErrorMessage(),
-                ResponseCode.SERVER_ERROR.getResponseCode());
+                ResponseCode.SERVER_ERROR.getStatusCode());
     }
 
     public static CustomException createClientException(ResponseCode responseCode) {
         return new CustomException(responseCode.getErrorCode(), responseCode.getErrorMessage(),
-                ResponseCode.CLIENT_ERROR.getResponseCode());
+                ResponseCode.CLIENT_ERROR.getStatusCode());
     }
 
     public static ApiResponse createDefaultResponse(String api) {
@@ -76,11 +72,11 @@ public class ProjectUtil {
     }
 
     public List<Map<String, Object>> parseListOfMap(String json) throws IOException {
-        return mapper.readValue(json, LIST_OF_MAP_TYPE);
+        return mapper.readValue(json, listOfMapType);
     }
 
     public Map<String, Object> parseMap(String json) throws IOException {
-        return mapper.readValue(json, MAP_TYPE);
+        return mapper.readValue(json, mapType);
     }
 
     public String convertToString(Object object) {

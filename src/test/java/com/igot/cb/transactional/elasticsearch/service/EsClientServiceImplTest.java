@@ -62,23 +62,7 @@ class EsClientServiceImplTest {
     @BeforeEach
     void setUp() {
         try (AutoCloseable ignored = MockitoAnnotations.openMocks(this)) {
-            esClientService = new EsClientServiceImpl(elasticsearchClient, esConfig);
-            // Inject mocked dependencies using reflection
-            try {
-                java.lang.reflect.Field objectMapperField = EsClientServiceImpl.class.getDeclaredField("objectMapper");
-                objectMapperField.setAccessible(true);
-                objectMapperField.set(esClientService, objectMapper);
-
-                java.lang.reflect.Field cbServerPropertiesField = EsClientServiceImpl.class.getDeclaredField("cbServerProperties");
-                cbServerPropertiesField.setAccessible(true);
-                cbServerPropertiesField.set(esClientService, cbServerProperties);
-
-                java.lang.reflect.Field serverConfigField = EsClientServiceImpl.class.getDeclaredField("serverConfig");
-                serverConfigField.setAccessible(true);
-                serverConfigField.set(esClientService, serverConfig);
-            } catch (Exception e) {
-                fail("Failed to inject mocks: " + e.getMessage());
-            }
+            esClientService = new EsClientServiceImpl(elasticsearchClient, esConfig, objectMapper, cbServerProperties, serverConfig);
         } catch (Exception e) {
             fail("Failed to initialize mocks: " + e.getMessage());
         }
@@ -714,7 +698,7 @@ class EsClientServiceImplTest {
     }
 
     @Test
-    void testSearchDocuments_nullCriteria() throws Exception {
+    void testSearchDocuments_nullCriteria() {
         String esIndexName = "test-index";
 
         // When criteria is null, buildSearchRequest returns null which causes assertion error
@@ -977,7 +961,8 @@ class EsClientServiceImplTest {
 
         Map<String, Object> result = esClientService.readDocument(esIndexName, id);
 
-        assertNull(result);
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
         verify(elasticsearchClient, times(1)).get(any(GetRequest.class), eq(Object.class));
     }
 
@@ -994,7 +979,8 @@ class EsClientServiceImplTest {
 
         Map<String, Object> result = esClientService.readDocument(esIndexName, id);
 
-        assertNull(result);
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
     }
 
     @Test
@@ -1007,7 +993,8 @@ class EsClientServiceImplTest {
 
         Map<String, Object> result = esClientService.readDocument(esIndexName, id);
 
-        assertNull(result);
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
     }
 
     // ==================== Helper Methods ====================

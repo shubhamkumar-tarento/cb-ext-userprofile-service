@@ -564,6 +564,10 @@ public class MasterDataServiceImplTest {
         assertEquals(HttpStatus.OK, response.getResponseCode());
         assertNull(response.getParams().getErrMsg());
         class TestableService extends MasterDataServiceImpl {
+            TestableService() {
+                super(null, null, null);
+            }
+
             public void testUpdateErrorDetails(ApiResponse res, String errMsg, HttpStatus status) {
                 updateErrorDetails(res, errMsg, status);
             }
@@ -1235,12 +1239,9 @@ public class MasterDataServiceImplTest {
         List<String> degreesList = Arrays.asList("Bachelor's", "Master's");
         degreesMap.put(Constants.DEGREES, degreesList);
 
-        MasterDataServiceImpl spyService = spy(new MasterDataServiceImpl());
-        spyService.cassandraOperation = cassandraOperation;
-
         // Use a spy on the real cache service to see actual behavior
-        CacheService spyCacheService = spy(new CacheService()); // Your real cache class
-        spyService.redisCacheMgr = spyCacheService;
+        CacheService spyCacheService = spy(new CacheService(null, null, null, new ObjectMapper()));
+        MasterDataServiceImpl spyService = spy(new MasterDataServiceImpl(accessTokenValidator, cassandraOperation, spyCacheService));
 
         when(cassandraOperation.updateRecord(anyString(), anyString(), anyMap()))
                 .thenReturn(Map.of(Constants.RESPONSE, Constants.SUCCESS));

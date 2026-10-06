@@ -53,7 +53,6 @@ public class Constants {
     public static final String REDIS_KEY_PREFIX = "cbpores_";
     public static final String KEYWORD = ".keyword";
     public static final String ASC = "asc";
-    public static final String JWT_SECRET_KEY = "demand_search_result";
     public static final String CONTENT_PROVIDER_ID = "id";
     public static final String INTEREST_COUNT = "interestCount";
     public static final String INTERESTS = "demand_search_result";

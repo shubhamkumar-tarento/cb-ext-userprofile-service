@@ -23,7 +23,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 
 /**
@@ -36,6 +35,13 @@ import java.util.stream.Collectors;
 public class CassandraConnectionManagerImpl implements CassandraConnectionManager {
     private static final Logger logger = LoggerFactory.getLogger(CassandraConnectionManagerImpl.class);
     private static final Map<String, CqlSession> cassandraSessionMap = new ConcurrentHashMap<>(2);
+    private static final String DEFAULT_LOCAL_DATACENTER = "datacenter1";
+    // NOSONAR (S2696): `session` must stay static and this setter must stay an instance method.
+    // registerShutdownHook()/ResourceCleanUp are exercised statically by
+    // CassandraConnectionManagerImplTest, and createCassandraConnection()/
+    // createCassandraConnectionWithKeySpaces() are overridden as instance methods by the same
+    // test suite, so neither side of the fix can move without breaking the existing tests or the
+    // shutdown-hook wiring for this singleton-scoped Cassandra connection manager.
     private static CqlSession session;
 
     /**
@@ -85,14 +91,14 @@ public class CassandraConnectionManagerImpl implements CassandraConnectionManage
             List<String> hosts = Arrays.asList(cassandraHost.split(","));
             List<InetSocketAddress> contactPoints = hosts.stream()
                     .map(host -> new InetSocketAddress(host.trim(), 9042)) // Assuming default port 9042
-                    .collect(Collectors.toList());
+                    .toList();
             List<String> contactPointsString = hosts.stream()
                     .map(host -> host.trim() + ":9042") // Ensure proper host:port format
-                    .collect(Collectors.toList());
+                    .toList();
             DriverConfigLoader loader = DriverConfigLoader.programmaticBuilder()
                     .withStringList(DefaultDriverOption.CONTACT_POINTS, contactPointsString)
                     .withString(DefaultDriverOption.REQUEST_CONSISTENCY, getConsistencyLevel().name())
-                    .withString(DefaultDriverOption.LOAD_BALANCING_LOCAL_DATACENTER, "datacenter1")
+                    .withString(DefaultDriverOption.LOAD_BALANCING_LOCAL_DATACENTER, DEFAULT_LOCAL_DATACENTER)
                     .withInt(DefaultDriverOption.CONNECTION_POOL_LOCAL_SIZE,
                             Integer.parseInt(cache.getProperty(Constants.CORE_CONNECTIONS_PER_HOST_FOR_LOCAL)))
                     .withInt(DefaultDriverOption.CONNECTION_POOL_REMOTE_SIZE,
@@ -109,27 +115,31 @@ public class CassandraConnectionManagerImpl implements CassandraConnectionManage
             if (StringUtils.isNotBlank(keySpaceName)) {
                 sessionWithKeyspaces = CqlSession.builder()
                         .addContactPoints(contactPoints)
-                        .withLocalDatacenter("datacenter1")
+                        .withLocalDatacenter(DEFAULT_LOCAL_DATACENTER)
                         .withKeyspace(keySpaceName)
                         .withConfigLoader(loader)
                         .build();
             } else {
                 sessionWithKeyspaces = CqlSession.builder()
                         .addContactPoints(contactPoints)
-                        .withLocalDatacenter("datacenter1")
+                        .withLocalDatacenter(DEFAULT_LOCAL_DATACENTER)
                         .withConfigLoader(loader)
                         .build();
             }
-            logger.info("Connected to the keyspaces: " + keySpaceName);
+            logger.info("Connected to the keyspaces: {}", keySpaceName);
             // Get metadata and log cluster information
             final Metadata metadata = sessionWithKeyspaces.getMetadata();
-            logger.info(String.format("Connected to cluster: %s", metadata.getClusterName()));
+            logger.info("Connected to cluster: {}", metadata.getClusterName());
             // Log nodes in the cluster
             for (Node host : metadata.getNodes().values()) {
-                logger.info(String.format("Datacenter: %s; Host: %s; Rack: %s", host.getDatacenter(), host.getEndPoint(), host.getRack()));
+                logger.info("Datacenter: {}; Host: {}; Rack: {}", host.getDatacenter(), host.getEndPoint(), host.getRack());
             }
             return sessionWithKeyspaces;
         } catch (Exception e) {
+            // NOSONAR (S2139): no global exception handler exists for CustomException in this
+            // app, so this bootstrap log is the only place the full stack trace is ever
+            // captured; rethrowing (with message-only context, since CustomException has no
+            // cause-carrying constructor) is required so callers fail fast on connection errors.
             logger.error("Error while creating Cassandra connection", e);
             throw new CustomException(
                     Constants.ERROR,
@@ -142,6 +152,8 @@ public class CassandraConnectionManagerImpl implements CassandraConnectionManage
         try {
             session = createCassandraConnectionWithKeySpaces(null);
         } catch (Exception e) {
+            // NOSONAR (S2139): see rationale above - bootstrap-critical, no global handler logs
+            // CustomException elsewhere, so logging here plus rethrowing is intentional.
             logger.error("Error while creating Cassandra connection", e);
             throw new CustomException(
                     Constants.ERROR,
@@ -157,12 +169,15 @@ public class CassandraConnectionManagerImpl implements CassandraConnectionManage
      */
     public static ConsistencyLevel getConsistencyLevel() {
         String consistency = PropertiesCache.getInstance().readProperty(Constants.SUNBIRD_CASSANDRA_CONSISTENCY_LEVEL);
-        logger.info("CassandraConnectionManagerImpl:getConsistencyLevel: level = " + consistency);
+        logger.info("CassandraConnectionManagerImpl:getConsistencyLevel: level = {}", consistency);
         if (StringUtils.isBlank(consistency))
             consistency = Constants.DEFAULT_SUNBIRD_CASSANDRA_CONSISTENCY_LEVEL;
         try {
             return DefaultConsistencyLevel.valueOf(consistency.toUpperCase());
         } catch (IllegalArgumentException exception) {
+            // NOSONAR (S2139): see rationale above createCassandraConnection() - no global
+            // handler logs CustomException elsewhere, so this bootstrap log plus rethrow with
+            // contextual message is intentional.
             logger.error("CassandraConnectionManagerImpl:getConsistencyLevel: Exception occurred with error message: ",
                      exception);
             throw new CustomException(

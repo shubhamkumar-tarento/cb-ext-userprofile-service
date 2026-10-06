@@ -7,33 +7,29 @@ import com.igot.cb.util.CbServerProperties;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
-import org.springframework.util.StringUtils;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 
 @Service
 @Slf4j
+@RequiredArgsConstructor
 public class CacheService {
 
-    private static int cache_ttl = 84600;
+    private static int cacheTtl = 84600;
 
-    @Autowired
-    private JedisPool jedisPool;
+    private final JedisPool jedisPool;
 
-    @Autowired
-    private JedisPool jedisDataPopulationPool;
+    private final JedisPool jedisDataPopulationPool;
 
-    @Autowired
-    CbServerProperties serverProperties;
+    private final CbServerProperties serverProperties;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper;
 
     private static final Logger logger = LoggerFactory.getLogger(CacheService.class);
 
@@ -42,7 +38,7 @@ public class CacheService {
         try (Jedis jedis = jedisDataPopulationPool.getResource()) {
             jedis.select(index);
             List<String> result = jedis.hmget(key, field);
-            String value = StringUtils.isEmpty(result) ? null : result.get(0);
+            String value = CollectionUtils.isEmpty(result) ? null : result.get(0);
             if (value != null) { // only reset TTL when a real value exists
                 if (ttlInSeconds > 0) {
                     jedis.expire(key, ttlInSeconds);
@@ -60,7 +56,7 @@ public class CacheService {
         try (Jedis jedis = jedisDataPopulationPool.getResource()) {
             jedis.select(index);
             jedis.hset(key, field, value);
-            int expiry = (ttlInSeconds > 0) ? ttlInSeconds : cache_ttl;
+            int expiry = (ttlInSeconds > 0) ? ttlInSeconds : cacheTtl;
             jedis.expire(key, expiry);
         } catch (Exception e) {
             logger.error("Error in hset: ", e);
@@ -72,14 +68,14 @@ public class CacheService {
             String data = objectMapper.writeValueAsString(object);
             jedis.set(key, data);
             jedis.expire(key, ttl);
-            logger.debug("Cache_key_value " + key + " is saved in redis");
+            logger.debug("Cache_key_value {} is saved in redis", key);
         } catch (Exception e) {
             logger.error("Error in putCache", e);
         }
     }
 
     public void putCache(String key, Object object) {
-        putCache(key, object, cache_ttl);
+        putCache(key, object, cacheTtl);
     }
 
     public String getCache(String key) {
@@ -133,7 +129,7 @@ public class CacheService {
             // Default index is 0, no need to select
             for (String key : keys) {
                 List<String> result = jedis.hmget(key, key);
-                String value = org.springframework.util.StringUtils.isEmpty(result) ? null : result.get(0);
+                String value = CollectionUtils.isEmpty(result) ? null : result.get(0);
                 resultList.add(value);
             }
         } catch (Exception e) {

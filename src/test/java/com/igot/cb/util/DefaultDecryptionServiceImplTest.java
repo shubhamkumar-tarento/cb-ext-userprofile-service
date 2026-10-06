@@ -5,7 +5,6 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 import java.lang.reflect.Field;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -13,7 +12,6 @@ import java.util.Map;
 
 import javax.crypto.Cipher;
 
-import org.apache.commons.lang3.StringUtils;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -140,6 +138,7 @@ public class DefaultDecryptionServiceImplTest {
                 DefaultDecryptionServiceImpl.decrypt("test", true);
                 fail("Should have thrown exception");
             } catch (ProjectCommonException e) {
+                // expected: decrypt(..., true) throws on failure, nothing further to assert here
             }
         } finally {
             cipherField.set(null, originalCipher);

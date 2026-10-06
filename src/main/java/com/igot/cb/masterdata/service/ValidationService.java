@@ -7,7 +7,7 @@ import com.igot.cb.util.ProjectUtil;
 import org.apache.commons.collections4.MapUtils;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -15,16 +15,19 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Service
+@RequiredArgsConstructor
 public class ValidationService {
 
-    @Autowired
-    private CbServerProperties cbServerProperties;
+    private static final String INVALID_REQUEST = "Invalid request";
+    private static final int MAX_DESCRIPTION_LENGTH = 255;
+
+    private final CbServerProperties cbServerProperties;
 
     public boolean validateSearchRequest(ApiResponse apiResponse, Map<String, Object> requestBody) {
 
         try {
             if (MapUtils.isEmpty(requestBody)) {
-                ProjectUtil.errorResponse(apiResponse, "Invalid request", HttpStatus.BAD_REQUEST);
+                ProjectUtil.errorResponse(apiResponse, INVALID_REQUEST, HttpStatus.BAD_REQUEST);
                 return false;
             }
             Map<String, Object> searchRequest = (Map<String, Object>) requestBody.get(Constants.REQUEST);
@@ -32,36 +35,11 @@ public class ValidationService {
                 searchRequest = new HashMap<>();
                 requestBody.put(Constants.REQUEST, searchRequest);
             }
-            Object pageObj = searchRequest.get(Constants.PAGE_NUMBER);
-            Object sizeObj = searchRequest.get(Constants.PAGE_SIZE);
-            if (ObjectUtils.isNotEmpty(pageObj)) {
-                if (!(pageObj instanceof Number)) {
-                    ProjectUtil.errorResponse(apiResponse, "pageNumber must be numeric", HttpStatus.BAD_REQUEST);
-                    return false;
-                }
-                int pageNumber = ((Number) pageObj).intValue();
-                if (pageNumber < 0) {
-                    ProjectUtil.errorResponse(apiResponse, "Invalid pageNumber", HttpStatus.BAD_REQUEST);
-                    return false;
-                }
+            if (!validatePagination(apiResponse, searchRequest)) {
+                return false;
             }
-            if (ObjectUtils.isNotEmpty(sizeObj)) {
-                if (!(sizeObj instanceof Number)) {
-                    ProjectUtil.errorResponse(apiResponse, "pageSize must be numeric", HttpStatus.BAD_REQUEST);
-                    return false;
-                }
-                int pageSize = ((Number) sizeObj).intValue();
-                if (pageSize <= 0) {
-                    ProjectUtil.errorResponse(apiResponse, "Invalid pageSize", HttpStatus.BAD_REQUEST);
-                    return false;
-                }
-            }
-            String sortBy = String.valueOf(searchRequest.getOrDefault(Constants.SORT_BY, "")).trim();
-            if (!sortBy.isEmpty()) {
-                if (!cbServerProperties.getMasterDataAllowedSortByFields().contains(sortBy)) {
-                    ProjectUtil.errorResponse(apiResponse, "sortBy field is not allowed", HttpStatus.BAD_REQUEST);
-                    return false;
-                }
+            if (!validateSortBy(apiResponse, searchRequest)) {
+                return false;
             }
             String keyword = searchRequest.get(Constants.SEARCH_STRING) != null
                     ? searchRequest.get(Constants.SEARCH_STRING).toString()
@@ -75,23 +53,60 @@ public class ValidationService {
         }
     }
 
+    private boolean validatePagination(ApiResponse apiResponse, Map<String, Object> searchRequest) {
+        Object pageObj = searchRequest.get(Constants.PAGE_NUMBER);
+        if (ObjectUtils.isNotEmpty(pageObj)) {
+            if (!(pageObj instanceof Number)) {
+                ProjectUtil.errorResponse(apiResponse, "pageNumber must be numeric", HttpStatus.BAD_REQUEST);
+                return false;
+            }
+            int pageNumber = ((Number) pageObj).intValue();
+            if (pageNumber < 0) {
+                ProjectUtil.errorResponse(apiResponse, "Invalid pageNumber", HttpStatus.BAD_REQUEST);
+                return false;
+            }
+        }
+        Object sizeObj = searchRequest.get(Constants.PAGE_SIZE);
+        if (ObjectUtils.isNotEmpty(sizeObj)) {
+            if (!(sizeObj instanceof Number)) {
+                ProjectUtil.errorResponse(apiResponse, "pageSize must be numeric", HttpStatus.BAD_REQUEST);
+                return false;
+            }
+            int pageSize = ((Number) sizeObj).intValue();
+            if (pageSize <= 0) {
+                ProjectUtil.errorResponse(apiResponse, "Invalid pageSize", HttpStatus.BAD_REQUEST);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean validateSortBy(ApiResponse apiResponse, Map<String, Object> searchRequest) {
+        String sortBy = String.valueOf(searchRequest.getOrDefault(Constants.SORT_BY, "")).trim();
+        if (!sortBy.isEmpty() && !cbServerProperties.getMasterDataAllowedSortByFields().contains(sortBy)) {
+            ProjectUtil.errorResponse(apiResponse, "sortBy field is not allowed", HttpStatus.BAD_REQUEST);
+            return false;
+        }
+        return true;
+    }
+
     public boolean validateSearchString(String keyword, ApiResponse apiResponse) {
-        int MIN_SEARCH_LENGTH = Integer.parseInt(cbServerProperties.getMasterDataSearchStringMinLength().trim());
-        int MAX_SEARCH_LENGTH = Integer.parseInt(cbServerProperties.getMasterDataSearchStringMaxLength().trim());
+        int minSearchLength = Integer.parseInt(cbServerProperties.getMasterDataSearchStringMinLength().trim());
+        int maxSearchLength = Integer.parseInt(cbServerProperties.getMasterDataSearchStringMaxLength().trim());
         if (StringUtils.isEmpty(keyword)) {
             return true;
         }
         keyword = keyword.trim();
         // Length validation
-        if (keyword.length() < MIN_SEARCH_LENGTH) {
+        if (keyword.length() < minSearchLength) {
             ProjectUtil.errorResponse(apiResponse,
-                    "searchString is too short, Minimum " + MIN_SEARCH_LENGTH + " characters are required.",
+                    "searchString is too short, Minimum " + minSearchLength + " characters are required.",
                     HttpStatus.BAD_REQUEST);
             return false;
         }
-        if (keyword.length() > MAX_SEARCH_LENGTH) {
+        if (keyword.length() > maxSearchLength) {
             ProjectUtil.errorResponse(apiResponse,
-                    "searchString is too long, Maximum " + MAX_SEARCH_LENGTH + " characters allowed.",
+                    "searchString is too long, Maximum " + maxSearchLength + " characters allowed.",
                     HttpStatus.BAD_REQUEST);
             return false;
         }
@@ -106,118 +121,111 @@ public class ValidationService {
     }
 
     public boolean upsertDegreeValidation(ApiResponse apiResponse, Map<String, Object> requestBody) {
-
-        // -------- Validate requestBody --------
-        if (MapUtils.isEmpty(requestBody)) {
-            ProjectUtil.errorResponse(apiResponse, "Invalid request", HttpStatus.BAD_REQUEST);
+        Map<String, Object> requestMap = extractRequestMap(apiResponse, requestBody);
+        if (requestMap == null) {
             return false;
+        }
+        Object id = requestMap.get(Constants.ID);
+        if (ObjectUtils.isNotEmpty(id)) {
+            return validateIdAndStatus(apiResponse, id, requestMap.get(Constants.STATUS));
+        }
+        return validateDegreeNameAndDescription(apiResponse, requestMap);
+    }
+
+    private boolean validateDegreeNameAndDescription(ApiResponse apiResponse, Map<String, Object> requestMap) {
+        // -------- Validate degree name --------
+        String name = extractTrimmedName(requestMap);
+        if (StringUtils.isEmpty(name)) {
+            ProjectUtil.errorResponse(apiResponse, "Degree name cannot be empty", HttpStatus.BAD_REQUEST);
+            return false;
+        }
+        String degreeRegex = cbServerProperties.getDegreeNameRegex();
+        if (StringUtils.isNotBlank(degreeRegex) && !name.matches(degreeRegex)) {
+            ProjectUtil.errorResponse(apiResponse, "Degree name contains invalid characters", HttpStatus.BAD_REQUEST);
+            return false;
+        }
+        // -------- Validate degree description (optional) --------
+        return validateDescriptionLength(apiResponse, requestMap, "Degree description cannot exceed 255 characters");
+    }
+
+    public boolean upsertInstituteValidation(ApiResponse apiResponse, Map<String, Object> requestBody) {
+        Map<String, Object> requestMap = extractRequestMap(apiResponse, requestBody);
+        if (requestMap == null) {
+            return false;
+        }
+        Object id = requestMap.get(Constants.ID);
+        if (ObjectUtils.isNotEmpty(id)) {
+            return validateIdAndStatus(apiResponse, id, requestMap.get(Constants.STATUS));
+        }
+        return validateInstituteNameAndDescription(apiResponse, requestMap);
+    }
+
+    private boolean validateInstituteNameAndDescription(ApiResponse apiResponse, Map<String, Object> requestMap) {
+        // -------- Validate institute name --------
+        String name = extractTrimmedName(requestMap);
+        if (StringUtils.isEmpty(name)) {
+            ProjectUtil.errorResponse(apiResponse, "Institute name cannot be empty", HttpStatus.BAD_REQUEST);
+            return false;
+        }
+        String instituteRegex = cbServerProperties.getInstituteNameRegex();
+        if (StringUtils.isNotBlank(instituteRegex) && !name.matches(instituteRegex)) {
+            ProjectUtil.errorResponse(apiResponse, "Institute name contains invalid characters", HttpStatus.BAD_REQUEST);
+            return false;
+        }
+        // -------- Validate institute description (optional) --------
+        return validateDescriptionLength(apiResponse, requestMap, "Institute description cannot exceed 255 characters");
+    }
+
+    /**
+     * Validates the top-level requestBody and extracts the nested "request" map.
+     * Returns null (after setting the error response) when invalid.
+     */
+    private Map<String, Object> extractRequestMap(ApiResponse apiResponse, Map<String, Object> requestBody) {
+        if (MapUtils.isEmpty(requestBody)) {
+            ProjectUtil.errorResponse(apiResponse, INVALID_REQUEST, HttpStatus.BAD_REQUEST);
+            return null;
         }
         Object reqObj = requestBody.get(Constants.REQUEST);
         if (!(reqObj instanceof Map) || MapUtils.isEmpty((Map<?, ?>) reqObj)) {
-            ProjectUtil.errorResponse(apiResponse, "Invalid request", HttpStatus.BAD_REQUEST);
+            ProjectUtil.errorResponse(apiResponse, INVALID_REQUEST, HttpStatus.BAD_REQUEST);
+            return null;
+        }
+        return (Map<String, Object>) reqObj;
+    }
+
+    private boolean validateIdAndStatus(ApiResponse apiResponse, Object id, Object statusObj) {
+        if (!(id instanceof Number)) {
+            ProjectUtil.errorResponse(apiResponse, "ID must be a numeric value", HttpStatus.BAD_REQUEST);
             return false;
         }
-        Map<String, Object> requestMap = (Map<String, Object>) reqObj;
-        Object id = requestMap.get(Constants.ID);
-        if (ObjectUtils.isNotEmpty(id)) {
-            if (!(id instanceof Number)) {
-                ProjectUtil.errorResponse(apiResponse, "ID must be a numeric value", HttpStatus.BAD_REQUEST);
+        if (ObjectUtils.isNotEmpty(statusObj)) {
+            int status;
+            try {
+                status = (statusObj instanceof Number n) ? n.intValue() : Integer.parseInt(statusObj.toString());
+            } catch (NumberFormatException ex) {
+                ProjectUtil.errorResponse(apiResponse, "Status must be a valid number", HttpStatus.BAD_REQUEST);
                 return false;
             }
-            Object statusObj = requestMap.get(Constants.STATUS);
-            if (ObjectUtils.isNotEmpty(statusObj)) {
-                int status;
-                try {
-                    status = (statusObj instanceof Number n) ? n.intValue() : Integer.parseInt(statusObj.toString());
-                } catch (NumberFormatException ex) {
-                    ProjectUtil.errorResponse(apiResponse, "Status must be a valid number", HttpStatus.BAD_REQUEST);
-                    return false;
-                }
-                if (status != 0 && status != 1) {
-                    ProjectUtil.errorResponse(apiResponse, "Status must be 0 or 1", HttpStatus.BAD_REQUEST);
-                    return false;
-                }
-            }
-        } else {
-            // -------- Validate degree name --------
-            Object nameObj = requestMap.get(Constants.NAME);
-            String name = nameObj == null ? "" : String.valueOf(nameObj).trim();
-            if (StringUtils.isEmpty(name)) {
-                ProjectUtil.errorResponse(apiResponse, "Degree name cannot be empty", HttpStatus.BAD_REQUEST);
+            if (status != 0 && status != 1) {
+                ProjectUtil.errorResponse(apiResponse, "Status must be 0 or 1", HttpStatus.BAD_REQUEST);
                 return false;
-            }
-            String degreeRegex = cbServerProperties.getDegreeNameRegex();
-            if (StringUtils.isNotBlank(degreeRegex) && !name.matches(degreeRegex)) {
-                ProjectUtil.errorResponse(apiResponse, "Degree name contains invalid characters", HttpStatus.BAD_REQUEST);
-                return false;
-            }
-            // -------- Validate degree description (optional) --------
-            Object descObj = requestMap.get(Constants.DESCRIPTION);
-            if (ObjectUtils.isNotEmpty(descObj)) {
-                String description = String.valueOf(descObj);
-                if (description.length() > 255) {
-                    ProjectUtil.errorResponse(apiResponse, "Degree description cannot exceed 255 characters", HttpStatus.BAD_REQUEST);
-                    return false;
-                }
             }
         }
         return true;
     }
 
-    public boolean upsertInstituteValidation(ApiResponse apiResponse, Map<String, Object> requestBody) {
+    private String extractTrimmedName(Map<String, Object> requestMap) {
+        Object nameObj = requestMap.get(Constants.NAME);
+        return nameObj == null ? "" : String.valueOf(nameObj).trim();
+    }
 
-        // -------- Validate requestBody --------
-        if (MapUtils.isEmpty(requestBody)) {
-            ProjectUtil.errorResponse(apiResponse, "Invalid request", HttpStatus.BAD_REQUEST);
-            return false;
-        }
-        Object reqObj = requestBody.get(Constants.REQUEST);
-        if (!(reqObj instanceof Map) || MapUtils.isEmpty((Map<?, ?>) reqObj)) {
-            ProjectUtil.errorResponse(apiResponse, "Invalid request", HttpStatus.BAD_REQUEST);
-            return false;
-        }
-        Map<String, Object> requestMap = (Map<String, Object>) reqObj;
-        Object id = requestMap.get(Constants.ID);
-        if (ObjectUtils.isNotEmpty(id)) {
-            if (!(id instanceof Number)) {
-                ProjectUtil.errorResponse(apiResponse, "ID must be a numeric value", HttpStatus.BAD_REQUEST);
+    private boolean validateDescriptionLength(ApiResponse apiResponse, Map<String, Object> requestMap, String errorMessage) {
+        Object descObj = requestMap.get(Constants.DESCRIPTION);
+        if (ObjectUtils.isNotEmpty(descObj)) {
+            String description = String.valueOf(descObj);
+            if (description.length() > MAX_DESCRIPTION_LENGTH) {
+                ProjectUtil.errorResponse(apiResponse, errorMessage, HttpStatus.BAD_REQUEST);
                 return false;
-            }
-            Object statusObj = requestMap.get(Constants.STATUS);
-            if (ObjectUtils.isNotEmpty(statusObj)) {
-                int status;
-                try {
-                    status = (statusObj instanceof Number n) ? n.intValue() : Integer.parseInt(statusObj.toString());
-                } catch (NumberFormatException ex) {
-                    ProjectUtil.errorResponse(apiResponse, "Status must be a valid number", HttpStatus.BAD_REQUEST);
-                    return false;
-                }
-                if (status != 0 && status != 1) {
-                    ProjectUtil.errorResponse(apiResponse, "Status must be 0 or 1", HttpStatus.BAD_REQUEST);
-                    return false;
-                }
-            }
-        } else {
-            // -------- Validate institute name --------
-            Object nameObj = requestMap.get(Constants.NAME);
-            String name = nameObj == null ? "" : String.valueOf(nameObj).trim();
-            if (StringUtils.isEmpty(name)) {
-                ProjectUtil.errorResponse(apiResponse, "Institute name cannot be empty", HttpStatus.BAD_REQUEST);
-                return false;
-            }
-            String instituteRegex = cbServerProperties.getInstituteNameRegex();
-            if (StringUtils.isNotBlank(instituteRegex) && !name.matches(instituteRegex)) {
-                ProjectUtil.errorResponse(apiResponse, "Institute name contains invalid characters", HttpStatus.BAD_REQUEST);
-                return false;
-            }
-            // -------- Validate institute description (optional) --------
-            Object descObj = requestMap.get(Constants.DESCRIPTION);
-            if (ObjectUtils.isNotEmpty(descObj)) {
-                String description = String.valueOf(descObj);
-                if (description.length() > 255) {
-                    ProjectUtil.errorResponse(apiResponse, "Institute description cannot exceed 255 characters", HttpStatus.BAD_REQUEST);
-                    return false;
-                }
             }
         }
         return true;

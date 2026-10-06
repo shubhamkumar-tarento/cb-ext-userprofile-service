@@ -6,8 +6,6 @@ import java.util.Map;
 public interface DecryptionService {
     String ALGORITHM = "AES";
     int ITERATIONS = 3;
-    byte[] keyValue =
-            new byte[] {'T', 'h', 'i', 's', 'A', 's', 'I', 'S', 'e', 'r', 'c', 'e', 'K', 't', 'e', 'y'};
 
     /**
      * This method will take input as key value pair , value can be any primitive or String or both or

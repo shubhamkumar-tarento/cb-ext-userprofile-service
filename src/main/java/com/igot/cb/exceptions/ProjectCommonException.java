@@ -74,7 +74,7 @@ public class ProjectCommonException extends RuntimeException {
     }
 
     public String getErrorMessage() {
-        return errorMessage;
+        return getMessage();
     }
 
     public void setErrorMessage(String errorMessage) {
@@ -133,7 +133,7 @@ public class ProjectCommonException extends RuntimeException {
         throw new ProjectCommonException(
                 responseCode,
                 StringUtils.isBlank(exceptionMessage) ? responseCode.getErrorMessage() : exceptionMessage,
-                ResponseCode.SERVER_ERROR.getResponseCode());
+                ResponseCode.SERVER_ERROR.getStatusCode());
     }
 
     public static void throwServerErrorException(ResponseCode responseCode) {

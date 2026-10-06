@@ -3,7 +3,7 @@ package com.igot.cb.profile.controller;
 import com.igot.cb.profile.service.ProfileService;
 import com.igot.cb.util.ApiResponse;
 import com.igot.cb.util.Constants;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -12,13 +12,13 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/user/profile")
+@RequiredArgsConstructor
 public class ProfileController {
 
-    @Autowired
-    private ProfileService profileService;
+    private final ProfileService profileService;
 
     @PostMapping("/extended")
-    public ResponseEntity<?> saveExtendedProfile(
+    public ResponseEntity<ApiResponse> saveExtendedProfile(
             @RequestHeader(value = Constants.X_AUTH_TOKEN, required = true) String authToken,
             @RequestBody Map<String, Object> request) throws Exception {
         ApiResponse response = profileService.saveExtendedProfile(request, authToken);
@@ -62,7 +62,7 @@ public class ProfileController {
     }
 
     @PutMapping("/extended")
-    public ResponseEntity<?> updateExtendedProfile(
+    public ResponseEntity<ApiResponse> updateExtendedProfile(
             @RequestHeader(value = Constants.X_AUTH_TOKEN, required = true) String authToken,
             @RequestBody Map<String, Object> request) throws Exception {
         ApiResponse response = profileService.updateExtendedProfile(request, authToken);
@@ -70,7 +70,7 @@ public class ProfileController {
     }
 
     @DeleteMapping("/extended")
-    public ResponseEntity<?> deleteExtendedProfile(
+    public ResponseEntity<ApiResponse> deleteExtendedProfile(
             @RequestHeader(value = Constants.X_AUTH_TOKEN, required = true) String authToken,
             @RequestBody Map<String, Object> request) {
 
@@ -134,22 +134,19 @@ public class ProfileController {
     @GetMapping("/v2/basic")
     public ResponseEntity<Object> getBasicProfileForPublic(
             @RequestHeader(value = Constants.X_AUTH_TOKEN, required = true) String authToken) {
-        ApiResponse response = profileService.getBasicProfile("", authToken, true);
-        return new ResponseEntity<>(response, response.getResponseCode());
+        return getBasicProfileForVolunteer(authToken);
     }
 
     @GetMapping("/v2/extended/all")
     public ResponseEntity<Object> getExtendedProfileSummaryForUser(@RequestHeader(value = Constants.X_AUTH_TOKEN, required = true) String authToken) {
-        ApiResponse response = profileService.getExtendedProfileSummary("", authToken);
-        return new ResponseEntity<>(response, HttpStatus.valueOf(response.getResponseCode().value()));
+        return getExtendedProfileSummaryForNgo(authToken);
     }
 
     @GetMapping("/v2/getAdditionalFields")
     public ResponseEntity<Object> getAdditionalFieldsByOrgForUser(
             @RequestHeader(Constants.X_AUTH_USER_ORG_ID)String userOrgId,
             @RequestHeader(value = Constants.X_AUTH_TOKEN) String authToken) {
-        ApiResponse response = profileService.getAdditionalFieldsByOrg("", userOrgId, authToken,true);
-        return new ResponseEntity<>(response, response.getResponseCode());
+        return getAdditionalFieldsByOrgForNgo(userOrgId, authToken);
     }
 }
 

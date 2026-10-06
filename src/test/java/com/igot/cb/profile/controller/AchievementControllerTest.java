@@ -32,7 +32,7 @@ class AchievementControllerTest {
     }
 
     @Test
-    void testCreateLearnerAchievement() throws Exception {
+    void testCreateLearnerAchievement() {
         Map<String, Object> request = new HashMap<>();
         ApiResponse apiResponse = new ApiResponse();
         apiResponse.setResponseCode(HttpStatus.OK);
@@ -43,7 +43,7 @@ class AchievementControllerTest {
     }
 
     @Test
-    void testUpdateLearnerAchievement() throws Exception {
+    void testUpdateLearnerAchievement() {
         Map<String, Object> request = new HashMap<>();
         ApiResponse apiResponse = new ApiResponse();
         apiResponse.setResponseCode(HttpStatus.OK);

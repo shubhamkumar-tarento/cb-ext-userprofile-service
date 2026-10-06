@@ -252,4 +252,7 @@ public class CbServerProperties {
     @Value("${validation.regex.uuid}")
     private String uuidRegex;
 
+    @Value("${achievement.jwt.secret.key}")
+    private String achievementJwtSecretKey;
+
 }

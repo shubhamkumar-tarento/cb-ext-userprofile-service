@@ -63,6 +63,7 @@ class AchievementServiceImplTest {
         when(cbServerProperties.getSearchResultRedisTtl()).thenReturn(1000L);
         when(cbServerProperties.getUserCompetencyTopicName()).thenReturn("user-competency-mapping-event");
         when(cbServerProperties.getAchievementCacheTtl()).thenReturn(100);
+        when(cbServerProperties.getAchievementJwtSecretKey()).thenReturn("test-secret-key");
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
 
         achievementService = new AchievementServiceImpl(
@@ -414,7 +415,7 @@ class AchievementServiceImplTest {
     // ==================== STATUS UPDATE TESTS ====================
 
     @Test
-    void testStatusUpdateLearnerAchievement_success() throws Exception {
+    void testStatusUpdateLearnerAchievement_success() {
         Map<String, Object> reqMap = new HashMap<>();
         reqMap.put("id", "achv1");
         reqMap.put("contextType", "testContext");
@@ -654,13 +655,13 @@ class AchievementServiceImplTest {
 
     @Test
     void testUpdateAchievementInES_contextDataString() throws Exception {
-        Map<String, Object> record = new HashMap<>();
-        record.put(Constants.STATUS, Constants.PENDING);
-        record.put("contextdata", "{\"key\":\"value\"}");
-        record.put(Constants.CREATED_ON, LocalDate.now());
+        Map<String, Object> recordMap = new HashMap<>();
+        recordMap.put(Constants.STATUS, Constants.PENDING);
+        recordMap.put("contextdata", "{\"key\":\"value\"}");
+        recordMap.put(Constants.CREATED_ON, LocalDate.now());
 
         when(cassandraOperation.getAllRecordsByPrimaryKey(any(), any(), any(), any(), anyInt()))
-                .thenReturn(Collections.singletonList(record));
+                .thenReturn(Collections.singletonList(recordMap));
 
         when(objectMapper.readValue(anyString(), eq(Map.class)))
                 .thenReturn(new HashMap<>());
@@ -725,9 +726,10 @@ class AchievementServiceImplTest {
         when(esClientService.searchDocuments(any(), any()))
                 .thenThrow(new RuntimeException("ES failure"));
 
+        Map<String, Object> validRequest = buildValidRequest();
         assertThrows(RuntimeException.class, () ->
                 achievementService.createLearnerAchievement(
-                        buildValidRequest(),
+                        validRequest,
                         "token",
                         "org"
                 )
@@ -800,12 +802,12 @@ class AchievementServiceImplTest {
         when(accessTokenValidator.fetchUserIdFromAccessToken(anyString()))
                 .thenReturn("user123");
 
-        Map<String, Object> record = new HashMap<>();
-        record.put(Constants.CONTEXT_DATA, "{\"a\":\"b\"}");
-        record.put(Constants.STATUS, Constants.PENDING);
+        Map<String, Object> recordMap = new HashMap<>();
+        recordMap.put(Constants.CONTEXT_DATA, "{\"a\":\"b\"}");
+        recordMap.put(Constants.STATUS, Constants.PENDING);
 
         when(cassandraOperation.getRecordsByPropertiesByKey(any(), any(), any(), any(), any()))
-                .thenReturn(Collections.singletonList(record));
+                .thenReturn(Collections.singletonList(recordMap));
 
         when(objectMapper.readValue(anyString(), eq(Map.class)))
                 .thenReturn(new HashMap<>());
@@ -822,14 +824,14 @@ class AchievementServiceImplTest {
         when(accessTokenValidator.fetchUserIdFromAccessToken(anyString()))
                 .thenReturn("user123");
 
-        Map<String, Object> record = new HashMap<>();
-        record.put(Constants.CONTEXT_DATA, new HashMap<>());
-        record.put(Constants.STATUS, Constants.PENDING);
+        Map<String, Object> recordMap = new HashMap<>();
+        recordMap.put(Constants.CONTEXT_DATA, new HashMap<>());
+        recordMap.put(Constants.STATUS, Constants.PENDING);
 
         when(cacheService.getCache(any())).thenReturn(null);
 
         when(cassandraOperation.getRecordsByPropertiesByKey(any(), any(), any(), any(), any()))
-                .thenReturn(Collections.singletonList(record));
+                .thenReturn(Collections.singletonList(recordMap));
 
         when(objectMapper.writeValueAsString(any()))
                 .thenThrow(new RuntimeException("Serialization fail"));
@@ -846,13 +848,13 @@ class AchievementServiceImplTest {
         when(accessTokenValidator.fetchUserIdFromAccessToken(anyString()))
                 .thenReturn("user123");
 
-        Map<String, Object> record = new HashMap<>();
-        record.put(Constants.STATUS, Constants.PENDING);
-        record.put("contextdata", new HashMap<>());
-        record.put(Constants.CREATED_ON, LocalDate.now());
+        Map<String, Object> recordMap = new HashMap<>();
+        recordMap.put(Constants.STATUS, Constants.PENDING);
+        recordMap.put("contextdata", new HashMap<>());
+        recordMap.put(Constants.CREATED_ON, LocalDate.now());
 
         when(cassandraOperation.getAllRecordsByPrimaryKey(any(), any(), any(), any(), anyInt()))
-                .thenReturn(Collections.singletonList(record));
+                .thenReturn(Collections.singletonList(recordMap));
 
         Map<String, Object> cassandraResponse = new HashMap<>();
         cassandraResponse.put(Constants.RESPONSE, Constants.SUCCESS);
@@ -972,7 +974,7 @@ class AchievementServiceImplTest {
     }
 
     @Test
-    void testGetUserAchievements_success_fromDatabase() throws Exception {
+    void testGetUserAchievements_success_fromDatabase() {
         when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
         when(cacheService.getCache(anyString())).thenReturn(null);
         when(cbServerProperties.getCassandraFetchLimit()).thenReturn(100);
@@ -1028,7 +1030,7 @@ class AchievementServiceImplTest {
     }
 
     @Test
-    void testGetUserAchievements_success_withLocalDateTimeFields() throws Exception {
+    void testGetUserAchievements_success_withLocalDateTimeFields() {
         when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
         when(cacheService.getCache(anyString())).thenReturn(null);
         when(cbServerProperties.getCassandraFetchLimit()).thenReturn(100);
@@ -1062,7 +1064,7 @@ class AchievementServiceImplTest {
     }
 
     @Test
-    void testGetUserAchievements_success_emptyResults() throws Exception {
+    void testGetUserAchievements_success_emptyResults() {
         when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
         when(cacheService.getCache(anyString())).thenReturn(null);
         when(cbServerProperties.getCassandraFetchLimit()).thenReturn(100);
@@ -1080,7 +1082,7 @@ class AchievementServiceImplTest {
     }
 
     @Test
-    void testGetUserAchievements_success_nullResults() throws Exception {
+    void testGetUserAchievements_success_nullResults() {
         when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
         when(cacheService.getCache(anyString())).thenReturn(null);
         when(cbServerProperties.getCassandraFetchLimit()).thenReturn(100);
@@ -1261,7 +1263,7 @@ class AchievementServiceImplTest {
     }
 
     @Test
-    void testGetUserAchievements_achievementWithoutDates() throws Exception {
+    void testGetUserAchievements_achievementWithoutDates() {
         when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
         when(cacheService.getCache(anyString())).thenReturn(null);
         when(cbServerProperties.getCassandraFetchLimit()).thenReturn(100);
@@ -1445,7 +1447,7 @@ class AchievementServiceImplTest {
     }
 
     @Test
-    void testCreateLearnerAchievement_withNullContextData_doesNotPublishKafkaEvent() throws Exception {
+    void testCreateLearnerAchievement_withNullContextData_doesNotPublishKafkaEvent() {
         // Arrange
         Map<String, Object> requestData = new HashMap<>();
         requestData.put(Constants.CONTEXT_TYPE, "testContext");

@@ -7,7 +7,7 @@ import java.lang.reflect.Field;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-public class EsClientConfigTest {
+class EsClientConfigTest {
     @Test
     void testElasticsearchClientBeanCreation() throws Exception {
 

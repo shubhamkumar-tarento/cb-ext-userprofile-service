@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
 import redis.clients.jedis.JedisPool;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -31,8 +30,7 @@ class RedisConfigTest {
         when(cbProperties.getRedisNumTestsPerEvictionRun()).thenReturn(3);
         when(cbProperties.getRedisBlockWhenExhausted()).thenReturn(true);
 
-        RedisConfig redisConfig = new RedisConfig();
-        ReflectionTestUtils.setField(redisConfig, "cbProperties", cbProperties);
+        RedisConfig redisConfig = new RedisConfig(cbProperties);
 
         JedisPool pool = redisConfig.jedisPool();
         assertNotNull(pool);
@@ -52,8 +50,7 @@ class RedisConfigTest {
         when(cbProperties.getRedisNumTestsPerEvictionRun()).thenReturn(2);
         when(cbProperties.getRedisBlockWhenExhausted()).thenReturn(false);
 
-        RedisConfig redisConfig = new RedisConfig();
-        ReflectionTestUtils.setField(redisConfig, "cbProperties", cbProperties);
+        RedisConfig redisConfig = new RedisConfig(cbProperties);
 
         JedisPool pool = redisConfig.jedisDataPopulationPool();
         assertNotNull(pool);

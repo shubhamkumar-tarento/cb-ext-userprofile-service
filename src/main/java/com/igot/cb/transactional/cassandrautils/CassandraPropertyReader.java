@@ -12,6 +12,9 @@ import java.util.Properties;
  * @author Mahesh RV
  * @author Ruksana
  */
+// NOSONAR (S6548): intentional Bill Pugh (static holder) singleton - lazy-initialized,
+// thread-safe without synchronization overhead, and this per-JVM cache of the properties
+// file is required so all Cassandra operations read the same loaded column/table mappings.
 public class CassandraPropertyReader {
 
     private static final String FILE_NAME = "cassandratablecolumn.properties";

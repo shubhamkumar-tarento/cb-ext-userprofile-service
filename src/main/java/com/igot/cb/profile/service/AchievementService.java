@@ -3,7 +3,6 @@ package com.igot.cb.profile.service;
 import com.igot.cb.transactional.elasticsearch.dto.SearchCriteria;
 import com.igot.cb.util.ApiResponse;
 
-import java.util.List;
 import java.util.Map;
 
 public interface AchievementService {

@@ -77,7 +77,8 @@ public class BASE64DecoderTest {
 
     @Test
     public void testDecodeAtomWithNewlines() throws IOException {
-        String input = "QUJD";
+        // Leading '\n' characters before the first atom character must be skipped by decodeAtom.
+        String input = "\n\nQUJD";
         byte[] expected = "ABC".getBytes();
         ByteArrayOutputStream outStream = new ByteArrayOutputStream();
         PushbackInputStream inStream = new PushbackInputStream(
@@ -89,7 +90,8 @@ public class BASE64DecoderTest {
 
     @Test
     public void testDecodeAtomWithCarriageReturns() throws IOException {
-        String input = "QUJD";
+        // Leading '\r' characters before the first atom character must be skipped by decodeAtom.
+        String input = "\r\rQUJD";
         byte[] expected = "ABC".getBytes();
         ByteArrayOutputStream outStream = new ByteArrayOutputStream();
         PushbackInputStream inStream = new PushbackInputStream(
@@ -203,7 +205,7 @@ public class BASE64DecoderTest {
     }
 
     @Test
-    public void testDecodeAtomEOFHandling() throws IOException {
+    public void testDecodeAtomEOFHandling() {
         String input1 = "";
         ByteArrayOutputStream outStream1 = new ByteArrayOutputStream();
         PushbackInputStream inStream1 = new PushbackInputStream(

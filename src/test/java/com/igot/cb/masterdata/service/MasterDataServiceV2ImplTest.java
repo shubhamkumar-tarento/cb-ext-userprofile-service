@@ -311,7 +311,7 @@ class MasterDataServiceV2ImplTest {
 
     // ---------------------- SEARCH MASTER DATA IN ES ----------------------
     @Test
-    void testSearchMasterDataInIgotES_success() throws Exception {
+    void testSearchMasterDataInIgotES_success() {
         Map<String, Object> searchRequest = Map.of(
                 Constants.PAGE_NUMBER, 0,
                 Constants.PAGE_SIZE, 10,

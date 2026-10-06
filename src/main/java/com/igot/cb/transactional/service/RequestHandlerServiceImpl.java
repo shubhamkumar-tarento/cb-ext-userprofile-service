@@ -5,9 +5,9 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.igot.cb.util.Constants;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -22,11 +22,11 @@ import java.util.Map;
 
 @Service
 @SuppressWarnings("unchecked")
+@RequiredArgsConstructor
 public class RequestHandlerServiceImpl {
     private Logger log = LoggerFactory.getLogger(RequestHandlerServiceImpl.class);
 
-    @Autowired
-    private RestTemplate restTemplate;
+    private final RestTemplate restTemplate;
 
     public Map<String, Object> fetchResultUsingPost(String uri, Object request, Map<String, String> headersValues) {
         ObjectMapper mapper = new ObjectMapper();
@@ -35,7 +35,7 @@ public class RequestHandlerServiceImpl {
         try {
             HttpHeaders headers = new HttpHeaders();
             if (!CollectionUtils.isEmpty(headersValues)) {
-                headersValues.forEach((k, v) -> headers.set(k, v));
+                headersValues.forEach(headers::set);
             }
             headers.setContentType(MediaType.APPLICATION_JSON);
             HttpEntity<Object> entity = new HttpEntity<>(request, headers);
@@ -58,13 +58,15 @@ public class RequestHandlerServiceImpl {
                         new TypeReference<HashMap<String, Object>>() {
                         });
             } catch (Exception e1) {
+                log.warn("Failed to parse error response body", e1);
             }
-            log.error("Error received: " + hce.getResponseBodyAsString(), hce);
+            log.error("Error received: {}", hce.getResponseBodyAsString(), hce);
         } catch (JsonProcessingException e) {
             log.error(String.valueOf(e));
             try {
                 log.warn("Error Response: " + mapper.writeValueAsString(response));
             } catch (Exception e1) {
+                log.warn("Failed to serialize error response for logging", e1);
             }
         }
         return response;
@@ -83,7 +85,7 @@ public class RequestHandlerServiceImpl {
             }
             HttpHeaders headers = new HttpHeaders();
             if (!CollectionUtils.isEmpty(headersValues)) {
-                headersValues.forEach((k, v) -> headers.set(k, v));
+                headersValues.forEach(headers::set);
             }
             HttpEntity<Object> entity = new HttpEntity<>(headers);
             response = restTemplate.exchange(uri, HttpMethod.GET, entity, Map.class).getBody();
@@ -93,13 +95,15 @@ public class RequestHandlerServiceImpl {
                         new TypeReference<HashMap<String, Object>>() {
                         });
             } catch (Exception e1) {
+                log.warn("Failed to parse error response body", e1);
             }
-            log.error("Error received: " + e.getResponseBodyAsString(), e);
+            log.error("Error received: {}", e.getResponseBodyAsString(), e);
         } catch (Exception e) {
             log.error(String.valueOf(e));
             try {
                 log.warn("Error Response: " + mapper.writeValueAsString(response));
             } catch (Exception e1) {
+                log.warn("Failed to serialize error response for logging", e1);
             }
         }
         return response;

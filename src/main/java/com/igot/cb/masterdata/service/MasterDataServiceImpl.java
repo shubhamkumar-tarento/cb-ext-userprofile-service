@@ -12,9 +12,9 @@ import com.igot.cb.util.ProjectUtil;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.collections4.MapUtils;
 import org.apache.commons.lang3.StringUtils;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -25,18 +25,16 @@ import java.util.*;
  */
 @Service
 @SuppressWarnings("unchecked")
+@RequiredArgsConstructor
 public class MasterDataServiceImpl implements MasterDataService {
 
     public static final Logger logger = LoggerFactory.getLogger(MasterDataServiceImpl.class);
 
-    @Autowired
-    public AccessTokenValidator accessTokenValidator;
+    private final AccessTokenValidator accessTokenValidator;
 
-    @Autowired
-    public CassandraOperation cassandraOperation;
+    private final CassandraOperation cassandraOperation;
 
-    @Autowired
-    public CacheService redisCacheMgr;
+    private final CacheService redisCacheMgr;
 
     /**
      * Retrieves a list of all institutions from the master data.

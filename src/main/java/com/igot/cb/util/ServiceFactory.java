@@ -2,6 +2,9 @@ package com.igot.cb.util;
 
 public class ServiceFactory {
 
+    private ServiceFactory() {
+    }
+
     private static EncryptionService encryptionService;
     private static DecryptionService decryptionService;
 

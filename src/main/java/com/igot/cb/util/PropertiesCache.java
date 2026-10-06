@@ -36,6 +36,9 @@ public class PropertiesCache {
             try {
                 configProp.load(in);
             } catch (IOException e) {
+                // Ignored intentionally: if a properties file is missing/unreadable, the corresponding
+                // keys simply won't be available via getProperty/readProperty (which fall back to env
+                // vars or the key itself), so loading continues with the remaining files.
             }
         }
     }

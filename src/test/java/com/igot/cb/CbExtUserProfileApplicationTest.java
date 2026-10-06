@@ -20,13 +20,13 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-public class CbExtUserProfileApplicationTest {
+class CbExtUserProfileApplicationTest {
 
     @Mock
     private CbServerProperties serverProperties;
 
     @Test
-    public void testRestTemplateCreation() {
+    void testRestTemplateCreation() {
         // Configure mock
         when(serverProperties.getRequestTimeoutMs()).thenReturn(5000);
         when(serverProperties.getMaxTotalConnections()).thenReturn(100);
@@ -44,7 +44,7 @@ public class CbExtUserProfileApplicationTest {
     }
 
     @Test
-    public void testMainMethod() {
+    void testMainMethod() {
         // Use MockedStatic to mock the static SpringApplication.run method
         try (MockedStatic<SpringApplication> mockedStatic = Mockito.mockStatic(SpringApplication.class)) {
             // Mock the static method to do nothing

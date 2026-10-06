@@ -2,8 +2,16 @@ package com.igot.cb.util;
 
 import java.io.*;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 
 public abstract class CharacterEncoder {
+
+    /** Dedicated error type for the internal "should never happen" failures below. */
+    private static class CharacterEncoderError extends Error {
+        CharacterEncoderError(String message) {
+            super(message);
+        }
+    }
 
     protected PrintStream pStream;
 
@@ -31,16 +39,16 @@ public abstract class CharacterEncoder {
      * Encode the suffix that ends every output line. By default this method just prints a <newline>
      * into the output stream.
      */
-    protected void encodeLineSuffix(OutputStream aStream) throws IOException {
+    protected void encodeLineSuffix() {
         pStream.println();
     }
 
     /** Encode one "atom" of information into characters. */
     protected abstract void encodeAtom(
-            OutputStream aStream, byte someBytes[], int anOffset, int aLength) throws IOException;
+            OutputStream aStream, byte[] someBytes, int anOffset, int aLength) throws IOException;
 
     /** This method works around the bizarre semantics of BufferedInputStream's read method. */
-    protected int readFully(InputStream in, byte buffer[]) throws java.io.IOException {
+    protected int readFully(InputStream in, byte[] buffer) throws java.io.IOException {
         for (int i = 0; i < buffer.length; i++) {
             int q = in.read();
             if (q == -1) return i;
@@ -57,28 +65,30 @@ public abstract class CharacterEncoder {
     public void encode(InputStream inStream, OutputStream outStream) throws IOException {
         int j;
         int numBytes;
-        byte tmpbuffer[] = new byte[bytesPerLine()];
+        byte[] tmpbuffer = new byte[bytesPerLine()];
 
         encodeBufferPrefix(outStream);
 
-        while (true) {
+        boolean hasMoreData = true;
+        while (hasMoreData) {
             numBytes = readFully(inStream, tmpbuffer);
             if (numBytes == 0) {
-                break;
-            }
-            encodeLinePrefix(outStream, numBytes);
-            for (j = 0; j < numBytes; j += bytesPerAtom()) {
-
-                if ((j + bytesPerAtom()) <= numBytes) {
-                    encodeAtom(outStream, tmpbuffer, j, bytesPerAtom());
-                } else {
-                    encodeAtom(outStream, tmpbuffer, j, (numBytes) - j);
-                }
-            }
-            if (numBytes < bytesPerLine()) {
-                break;
+                hasMoreData = false;
             } else {
-                encodeLineSuffix(outStream);
+                encodeLinePrefix(outStream, numBytes);
+                for (j = 0; j < numBytes; j += bytesPerAtom()) {
+
+                    if ((j + bytesPerAtom()) <= numBytes) {
+                        encodeAtom(outStream, tmpbuffer, j, bytesPerAtom());
+                    } else {
+                        encodeAtom(outStream, tmpbuffer, j, (numBytes) - j);
+                    }
+                }
+                if (numBytes < bytesPerLine()) {
+                    hasMoreData = false;
+                } else {
+                    encodeLineSuffix();
+                }
             }
         }
         encodeBufferSuffix(outStream);
@@ -88,7 +98,7 @@ public abstract class CharacterEncoder {
      * Encode the buffer in <i>aBuffer</i> and write the encoded result to the OutputStream
      * <i>aStream</i>.
      */
-    public void encode(byte aBuffer[], OutputStream aStream) throws IOException {
+    public void encode(byte[] aBuffer, OutputStream aStream) throws IOException {
         ByteArrayInputStream inStream = new ByteArrayInputStream(aBuffer);
         encode(inStream, aStream);
     }
@@ -97,17 +107,17 @@ public abstract class CharacterEncoder {
      * A 'streamless' version of encode that simply takes a buffer of bytes and returns a string
      * containing the encoded buffer.
      */
-    public String encode(byte aBuffer[]) {
+    public String encode(byte[] aBuffer) {
         ByteArrayOutputStream outStream = new ByteArrayOutputStream();
         ByteArrayInputStream inStream = new ByteArrayInputStream(aBuffer);
         String retVal = null;
         try {
             encode(inStream, outStream);
             // explicit ascii->unicode conversion
-            retVal = outStream.toString("8859_1");
-        } catch (Exception IOException) {
+            retVal = outStream.toString(StandardCharsets.ISO_8859_1);
+        } catch (Exception ex) {
             // This should never happen.
-            throw new Error("CharacterEncoder.encode internal error");
+            throw new CharacterEncoderError("CharacterEncoder.encode internal error");
         }
         return (retVal);
     }
@@ -186,26 +196,28 @@ public abstract class CharacterEncoder {
     public void encodeBuffer(InputStream inStream, OutputStream outStream) throws IOException {
         int j;
         int numBytes;
-        byte tmpbuffer[] = new byte[bytesPerLine()];
+        byte[] tmpbuffer = new byte[bytesPerLine()];
 
         encodeBufferPrefix(outStream);
 
-        while (true) {
+        boolean hasMoreData = true;
+        while (hasMoreData) {
             numBytes = readFully(inStream, tmpbuffer);
             if (numBytes == 0) {
-                break;
-            }
-            encodeLinePrefix(outStream, numBytes);
-            for (j = 0; j < numBytes; j += bytesPerAtom()) {
-                if ((j + bytesPerAtom()) <= numBytes) {
-                    encodeAtom(outStream, tmpbuffer, j, bytesPerAtom());
-                } else {
-                    encodeAtom(outStream, tmpbuffer, j, (numBytes) - j);
+                hasMoreData = false;
+            } else {
+                encodeLinePrefix(outStream, numBytes);
+                for (j = 0; j < numBytes; j += bytesPerAtom()) {
+                    if ((j + bytesPerAtom()) <= numBytes) {
+                        encodeAtom(outStream, tmpbuffer, j, bytesPerAtom());
+                    } else {
+                        encodeAtom(outStream, tmpbuffer, j, (numBytes) - j);
+                    }
                 }
-            }
-            encodeLineSuffix(outStream);
-            if (numBytes < bytesPerLine()) {
-                break;
+                encodeLineSuffix();
+                if (numBytes < bytesPerLine()) {
+                    hasMoreData = false;
+                }
             }
         }
         encodeBufferSuffix(outStream);
@@ -215,7 +227,7 @@ public abstract class CharacterEncoder {
      * Encode the buffer in <i>aBuffer</i> and write the encoded result to the OutputStream
      * <i>aStream</i>.
      */
-    public void encodeBuffer(byte aBuffer[], OutputStream aStream) throws IOException {
+    public void encodeBuffer(byte[] aBuffer, OutputStream aStream) throws IOException {
         ByteArrayInputStream inStream = new ByteArrayInputStream(aBuffer);
         encodeBuffer(inStream, aStream);
     }
@@ -224,14 +236,14 @@ public abstract class CharacterEncoder {
      * A 'streamless' version of encode that simply takes a buffer of bytes and returns a string
      * containing the encoded buffer.
      */
-    public String encodeBuffer(byte aBuffer[]) {
+    public String encodeBuffer(byte[] aBuffer) {
         ByteArrayOutputStream outStream = new ByteArrayOutputStream();
         ByteArrayInputStream inStream = new ByteArrayInputStream(aBuffer);
         try {
             encodeBuffer(inStream, outStream);
-        } catch (Exception IOException) {
+        } catch (Exception ex) {
             // This should never happen.
-            throw new Error("CharacterEncoder.encodeBuffer internal error");
+            throw new CharacterEncoderError("CharacterEncoder.encodeBuffer internal error");
         }
         return (outStream.toString());
     }

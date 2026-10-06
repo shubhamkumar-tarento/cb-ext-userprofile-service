@@ -6,11 +6,9 @@ import com.igot.cb.masterdata.service.MasterDataServiceV2;
 import com.igot.cb.util.ApiResponse;
 import com.igot.cb.util.Constants;
 import com.igot.cb.util.ProjectUtil;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -43,7 +41,6 @@ class MasterDataControllerTest {
     @Mock
     private MasterDataService masterDataService;
 
-    @InjectMocks
     private MasterDataController masterDataController;
 
     @Mock
@@ -51,8 +48,11 @@ class MasterDataControllerTest {
 
     @BeforeEach
     void setup() {
-        mockMvc = MockMvcBuilders.standaloneSetup(masterDataController).build();
         MockitoAnnotations.openMocks(this);
+        // @InjectMocks constructor resolution is unreliable here; construct explicitly so
+        // the controller is guaranteed to hold these exact mock instances.
+        masterDataController = new MasterDataController(masterDataService, masterDataServiceV2);
+        mockMvc = MockMvcBuilders.standaloneSetup(masterDataController).build();
     }
 
     @Test

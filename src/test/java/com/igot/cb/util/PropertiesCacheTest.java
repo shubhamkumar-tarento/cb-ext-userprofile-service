@@ -78,7 +78,7 @@ public class PropertiesCacheTest {
         String result1 = instance.getProperty("existing.key");
         // This will either be the property value or an env var if it exists with that name
         // But the key definitely exists in properties, so it will never return null or the key itself
-        assertEquals(result1, "property.value"); // Self-equality to handle env var possibility
+        assertEquals("property.value", result1); // Self-equality to handle env var possibility
 
         // Test case 2: Key doesn't exist in properties - should return the key itself
         String nonExistentKey = "non.existent.key." + System.currentTimeMillis();

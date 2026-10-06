@@ -3,7 +3,7 @@ package com.igot.cb.transactional.redis.config;
 import com.igot.cb.transactional.elasticsearch.dto.SearchResult;
 import com.igot.cb.util.CbServerProperties;
 import com.igot.cb.util.Constants;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -13,17 +13,16 @@ import redis.clients.jedis.JedisPoolConfig;
 
 @Configuration
 @EnableCaching
+@RequiredArgsConstructor
 public class RedisConfig {
 
-    @Autowired
-    CbServerProperties cbProperties;
+    private final CbServerProperties cbProperties;
 
     @Bean
     public JedisPool jedisPool() {
         final JedisPoolConfig poolConfig = buildPoolConfig();
-        JedisPool jedisPool = new JedisPool(poolConfig, cbProperties.getRedisHostName(),
+        return new JedisPool(poolConfig, cbProperties.getRedisHostName(),
                 Integer.parseInt(cbProperties.getRedisPort()));
-        return jedisPool;
     }
 
     @Bean
@@ -41,8 +40,8 @@ public class RedisConfig {
         poolConfig.setTestOnBorrow(cbProperties.getRedisTestOnBorrow());
         poolConfig.setTestOnReturn(cbProperties.getRedisTestOnReturn());
         poolConfig.setTestWhileIdle(cbProperties.getRedisTestWhileIdle());
-        poolConfig.setMinEvictableIdleTimeMillis(cbProperties.getRedisMinEvictableIdleTimeMillis());
-        poolConfig.setTimeBetweenEvictionRunsMillis(cbProperties.getRedisNumTestsPerEvictionRun());
+        poolConfig.setMinEvictableIdleTime(java.time.Duration.ofMillis(cbProperties.getRedisMinEvictableIdleTimeMillis()));
+        poolConfig.setTimeBetweenEvictionRuns(java.time.Duration.ofMillis(cbProperties.getRedisNumTestsPerEvictionRun()));
         poolConfig.setNumTestsPerEvictionRun(cbProperties.getRedisNumTestsPerEvictionRun());
         poolConfig.setBlockWhenExhausted(cbProperties.getRedisBlockWhenExhausted());
         return poolConfig;
@@ -50,9 +49,11 @@ public class RedisConfig {
 
     @Bean(name = Constants.SEARCH_RESULT_REDIS_TEMPLATE)
     public RedisTemplate<String, SearchResult> searchResultRedisTemplate() {
-        org.springframework.data.redis.connection.jedis.JedisConnectionFactory jedisConnectionFactory = new org.springframework.data.redis.connection.jedis.JedisConnectionFactory();
-        jedisConnectionFactory.setHostName(cbProperties.getRedisHostName());
-        jedisConnectionFactory.setPort(Integer.parseInt(cbProperties.getRedisPort()));
+        org.springframework.data.redis.connection.RedisStandaloneConfiguration redisStandaloneConfiguration =
+                new org.springframework.data.redis.connection.RedisStandaloneConfiguration(cbProperties.getRedisHostName(),
+                        Integer.parseInt(cbProperties.getRedisPort()));
+        org.springframework.data.redis.connection.jedis.JedisConnectionFactory jedisConnectionFactory =
+                new org.springframework.data.redis.connection.jedis.JedisConnectionFactory(redisStandaloneConfiguration);
         jedisConnectionFactory.afterPropertiesSet();
         RedisTemplate<String, SearchResult> template = new RedisTemplate<>();
         template.setConnectionFactory(jedisConnectionFactory);

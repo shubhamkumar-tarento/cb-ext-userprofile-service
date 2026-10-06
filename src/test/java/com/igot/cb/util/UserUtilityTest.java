@@ -16,12 +16,10 @@ import org.mockito.MockedStatic;
 public class UserUtilityTest {
 
     private DecryptionService mockDecryptionService;
-    private PropertiesCache mockPropertiesCache;
 
     @Before
     public void setup() {
         mockDecryptionService = mock(DecryptionService.class);
-        mockPropertiesCache = mock(PropertiesCache.class);
     }
 
     @Test

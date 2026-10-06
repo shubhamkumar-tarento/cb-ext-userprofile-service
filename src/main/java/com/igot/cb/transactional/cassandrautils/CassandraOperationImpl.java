@@ -19,9 +19,9 @@ import com.igot.cb.util.ProjectUtil;
 
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.collections4.MapUtils;
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.nio.ByteBuffer;
@@ -35,15 +35,14 @@ import java.util.stream.Collectors;
  * @author Ruksana
  */
 @Component
+@RequiredArgsConstructor
 public class CassandraOperationImpl implements CassandraOperation {
 
     private Logger logger = LoggerFactory.getLogger(CassandraOperationImpl.class);
 
-    @Autowired
-    CassandraConnectionManager connectionManager;
+    private final CassandraConnectionManager connectionManager;
 
-    @Autowired
-    ProjectUtil projectUtil;
+    private final ProjectUtil projectUtil;
 
     public Select processQuery(String keyspaceName, String tableName, Map<String, Object> propertyMap,
             List<String> fields) {
@@ -84,10 +83,10 @@ public class CassandraOperationImpl implements CassandraOperation {
             CqlSession session = connectionManager.getSession(keyspaceName);
             ResultSet results = session.execute(selectQuery.build());
             response = CassandraUtil.createResponse(results);
-            logger.info(response.toString());
+            logger.info("{}", response);
 
         } catch (Exception e) {
-            logger.error(Constants.EXCEPTION_MSG_FETCH + tableName + " : " + e.getMessage(), e);
+            logger.error(Constants.EXCEPTION_MSG_FETCH + "{} : {}", tableName, e.getMessage(), e);
         }
         return response;
     }
@@ -138,7 +137,7 @@ public class CassandraOperationImpl implements CassandraOperation {
     public Map<String, Object> updateRecord(
             String keyspaceName, String tableName, Map<String, Object> request) {
         long startTime = System.currentTimeMillis();
-        logger.debug("Cassandra Service updateRecord method started at ==" + startTime);
+        logger.debug("Cassandra Service updateRecord method started at == {}", startTime);
         Map<String, Object> response = new HashMap<>();
         String query = getUpdateQueryStatement(keyspaceName, tableName, request);
         try {
@@ -160,18 +159,18 @@ public class CassandraOperationImpl implements CassandraOperation {
             connectionManager.getSession(keyspaceName).execute(boundStatement);
             response.put(Constants.RESPONSE, Constants.SUCCESS);
             if (tableName.equalsIgnoreCase(Constants.USER)) {
-                logger.info("Cassandra Service updateRecord in user table :" + request);
+                logger.info("Cassandra Service updateRecord in user table : {}", request);
             }
         } catch (Exception e) {
             if (e.getMessage().contains(Constants.UNKNOWN_IDENTIFIER)) {
                 logger.error(
-                        Constants.EXCEPTION_MSG_UPDATE + tableName + " : " + e.getMessage(), e);
+                        Constants.EXCEPTION_MSG_UPDATE + "{} : {}", tableName, e.getMessage(), e);
                 String errMsg = String.format("Exception occurred while updating record to to %s %s", tableName,
                         e.getMessage());
                 response.put(Constants.RESPONSE, Constants.FAILED);
                 response.put(Constants.ERROR_MESSAGE, errMsg);
             }
-            logger.error(Constants.EXCEPTION_MSG_UPDATE + tableName + " : " + e.getMessage(), e);
+            logger.error(Constants.EXCEPTION_MSG_UPDATE + "{} : {}", tableName, e.getMessage(), e);
         } finally {
             logQueryElapseTime("updateRecord", startTime, query);
         }
@@ -192,12 +191,14 @@ public class CassandraOperationImpl implements CassandraOperation {
 
     protected void logQueryElapseTime(
             String operation, long startTime, String query) {
-        logger.info("Cassandra query : " + query);
+        logger.info("Cassandra query : {}", query);
         long stopTime = System.currentTimeMillis();
         long elapsedTime = stopTime - startTime;
-        String message = "Cassandra operation {0} started at {1} and completed at {2}. Total time elapsed is {3}.";
-        MessageFormat mf = new MessageFormat(message);
-        logger.debug(mf.format(new Object[] { operation, startTime, stopTime, elapsedTime }));
+        if (logger.isDebugEnabled()) {
+            String message = "Cassandra operation {0} started at {1} and completed at {2}. Total time elapsed is {3}.";
+            MessageFormat mf = new MessageFormat(message);
+            logger.debug(mf.format(new Object[] { operation, startTime, stopTime, elapsedTime }));
+        }
     }
 
     @Override
@@ -224,7 +225,6 @@ public class CassandraOperationImpl implements CassandraOperation {
             logger.error(errMsg, e);
             response.put(Constants.RESPONSE, Constants.FAILED);
             response.put(Constants.ERROR_MESSAGE, errMsg);
-            throw e;
         }
         return response;
     }
@@ -232,10 +232,12 @@ public class CassandraOperationImpl implements CassandraOperation {
     public List<Map<String, Object>> getAllRecordsByPrimaryKey(String keyspaceName, String tableName,
             Map<String, Object> primaryKey, List<String> fields, int pageSize) {
         List<Map<String, Object>> allResults = new ArrayList<>();
-        logger.info(
-                "CassandraOperationImpl::getAllRecordsByPrimaryKey: Fetching all records for table: {} with primaryKey: {}",
-                tableName,
-                projectUtil.convertToString(primaryKey));
+        if (logger.isInfoEnabled()) {
+            logger.info(
+                    "CassandraOperationImpl::getAllRecordsByPrimaryKey: Fetching all records for table: {} with primaryKey: {}",
+                    tableName,
+                    projectUtil.convertToString(primaryKey));
+        }
         ByteBuffer pagingState = null;
         try {
             do {
