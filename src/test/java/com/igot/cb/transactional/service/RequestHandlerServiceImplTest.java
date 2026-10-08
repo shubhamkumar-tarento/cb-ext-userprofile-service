@@ -231,4 +231,73 @@ public class RequestHandlerServiceImplTest {
         verify(mockLogger, atLeastOnce()).debug(anyString());
     }
 
+    /**
+     * A request object whose getter throws at serialization time, forcing Jackson's
+     * real ObjectMapper (used internally by the production method) to raise a
+     * JsonMappingException (a JsonProcessingException) while building the debug log.
+     */
+    static class BadRequest {
+        public String getValue() {
+            throw new RuntimeException("boom");
+        }
+    }
+
+    @Test
+    public void testFetchResultUsingPost_realJsonProcessingExceptionDuringDebugLogging() throws Exception {
+        String uri = "http://example.com/api";
+        BadRequest request = new BadRequest();
+        Map<String, String> headersValues = new HashMap<>();
+
+        when(mockLogger.isDebugEnabled()).thenReturn(true);
+
+        Map<String, Object> response = requestHandlerServiceImpl.fetchResultUsingPost(uri, request, headersValues);
+
+        assertNull(response);
+        verify(mockLogger, atLeastOnce()).error(anyString());
+        verifyNoInteractions(restTemplate);
+    }
+
+    @Test
+    public void testFetchResultUsingPost_httpClientErrorException_unparseableErrorBody() throws Exception {
+        String uri = "http://example.com/api";
+        Object request = new Object();
+        Map<String, String> headersValues = new HashMap<>();
+        String invalidJson = "not-a-json-body";
+        HttpClientErrorException exception = HttpClientErrorException.create(
+                HttpStatus.BAD_REQUEST,
+                "Bad Request",
+                HttpHeaders.EMPTY,
+                invalidJson.getBytes(),
+                null
+        );
+        when(restTemplate.postForObject(anyString(), any(HttpEntity.class), eq(Map.class)))
+                .thenThrow(exception);
+
+        Map<String, Object> response = requestHandlerServiceImpl.fetchResultUsingPost(uri, request, headersValues);
+
+        assertNull(response);
+        verify(mockLogger, atLeastOnce()).warn(eq("Failed to parse error response body"), any(Exception.class));
+    }
+
+    @Test
+    public void testFetchUsingGetWithHeadersProfile_httpClientErrorException_unparseableErrorBody() {
+        String uri = "http://example.com/api";
+        Map<String, String> headersValues = new HashMap<>();
+        String invalidJson = "not-a-json-body";
+        HttpClientErrorException exception = HttpClientErrorException.create(
+                HttpStatus.BAD_REQUEST,
+                "Bad Request",
+                HttpHeaders.EMPTY,
+                invalidJson.getBytes(),
+                null
+        );
+        when(restTemplate.exchange(eq(uri), eq(HttpMethod.GET), any(HttpEntity.class), eq(Map.class)))
+                .thenThrow(exception);
+
+        Object response = requestHandlerServiceImpl.fetchUsingGetWithHeadersProfile(uri, headersValues);
+
+        assertNull(response);
+        verify(mockLogger, atLeastOnce()).warn(eq("Failed to parse error response body"), any(Exception.class));
+    }
+
 }

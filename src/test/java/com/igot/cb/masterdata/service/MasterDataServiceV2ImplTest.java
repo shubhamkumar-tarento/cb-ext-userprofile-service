@@ -806,6 +806,197 @@ class MasterDataServiceV2ImplTest {
     }
 
     @Test
+    void testUpdateDegree_duplicateNameConflict() {
+        Degree existing = new Degree();
+        existing.setId(1L);
+        existing.setName("Old Name");
+
+        Degree duplicate = new Degree();
+        duplicate.setId(2L);
+        duplicate.setName("MBA");
+
+        Map<String, Object> requestBody = Map.of(
+                Constants.REQUEST, Map.of(Constants.ID, 1L, Constants.NAME, "MBA")
+        );
+
+        when(validationService.upsertDegreeValidation(any(), any())).thenReturn(true);
+        when(degreeRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(degreeRepository.findByNameIgnoreCase("MBA")).thenReturn(Optional.of(duplicate));
+
+        ApiResponse response = masterDataService.upsertDegree(requestBody);
+
+        assertEquals("Degree already exists with the name: MBA", response.getParams().getErrMsg());
+        assertEquals(HttpStatus.CONFLICT, response.getResponseCode());
+    }
+
+    @Test
+    void testUpdateDegree_duplicateNameSameIdNoConflict() {
+        Degree existing = new Degree();
+        existing.setId(1L);
+        existing.setName("Old Name");
+
+        Map<String, Object> requestBody = Map.of(
+                Constants.REQUEST, Map.of(Constants.ID, 1L, Constants.NAME, "MBA")
+        );
+
+        when(validationService.upsertDegreeValidation(any(), any())).thenReturn(true);
+        when(degreeRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(degreeRepository.findByNameIgnoreCase("MBA")).thenReturn(Optional.of(existing));
+        when(degreeRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(serverProperties.getEsDegreeIndexName()).thenReturn("degree_index");
+        when(serverProperties.getEsMasterDataIndexDocType()).thenReturn("_doc");
+        when(esUtilService.saveObjectInIgotES(any(), any(), any(), any()))
+                .thenReturn(EsResponse.builder().success(true).build());
+
+        ApiResponse response = masterDataService.upsertDegree(requestBody);
+
+        Degree result = (Degree) response.getResult().get(Constants.RESULT);
+        assertEquals("MBA", result.getName());
+    }
+
+    @Test
+    void testUpdateInstitute_duplicateNameConflict() {
+        Institute existing = new Institute();
+        existing.setId(1L);
+        existing.setName("Old Name");
+
+        Institute duplicate = new Institute();
+        duplicate.setId(2L);
+        duplicate.setName("IIT");
+
+        Map<String, Object> requestBody = Map.of(
+                Constants.REQUEST, Map.of(Constants.ID, 1L, Constants.NAME, "IIT")
+        );
+
+        when(validationService.upsertInstituteValidation(any(), any())).thenReturn(true);
+        when(instituteRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(instituteRepository.findByNameIgnoreCase("IIT")).thenReturn(Optional.of(duplicate));
+
+        ApiResponse response = masterDataService.upsertInstitute(requestBody);
+
+        assertEquals("Institute already exists with the name: IIT", response.getParams().getErrMsg());
+        assertEquals(HttpStatus.CONFLICT, response.getResponseCode());
+    }
+
+    @Test
+    void testUpdateInstitute_duplicateNameSameIdNoConflict() {
+        Institute existing = new Institute();
+        existing.setId(1L);
+        existing.setName("Old Name");
+
+        Map<String, Object> requestBody = Map.of(
+                Constants.REQUEST, Map.of(Constants.ID, 1L, Constants.NAME, "IIT")
+        );
+
+        when(validationService.upsertInstituteValidation(any(), any())).thenReturn(true);
+        when(instituteRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(instituteRepository.findByNameIgnoreCase("IIT")).thenReturn(Optional.of(existing));
+        when(instituteRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(serverProperties.getEsInstituteIndexName()).thenReturn("inst_index");
+        when(serverProperties.getEsMasterDataIndexDocType()).thenReturn("_doc");
+        when(esUtilService.saveObjectInIgotES(any(), any(), any(), any()))
+                .thenReturn(EsResponse.builder().success(true).build());
+
+        ApiResponse response = masterDataService.upsertInstitute(requestBody);
+
+        Institute result = (Institute) response.getResult().get(Constants.RESULT);
+        assertEquals("IIT", result.getName());
+    }
+
+    @Test
+    void searchMasterData_sortByDescriptionDesc() throws Exception {
+        Map<String, Object> searchRequest = new HashMap<>();
+        searchRequest.put(Constants.SORT_BY, Constants.DESCRIPTION);
+        searchRequest.put(Constants.ORDER_BY, "DESC");
+
+        SearchHit hit = mock(SearchHit.class);
+        when(hit.getSourceAsMap()).thenReturn(Map.of(Constants.NAME, "MBA"));
+
+        SearchHits hits = mock(SearchHits.class);
+        when(hits.getHits()).thenReturn(new SearchHit[]{hit});
+        when(hits.getTotalHits()).thenReturn(1L);
+
+        SearchResponse response = mock(SearchResponse.class);
+        when(response.getHits()).thenReturn(hits);
+
+        when(igotESClient.search(any(SearchRequest.class), eq(RequestOptions.DEFAULT)))
+                .thenReturn(response);
+
+        EsResponse result = masterDataService.searchMasterDataInIgotES("idx", "_doc", searchRequest);
+
+        assertTrue(result.isSuccess());
+    }
+
+    @Test
+    void searchMasterData_withNameFilter() throws Exception {
+        Map<String, Object> searchRequest = new HashMap<>();
+        searchRequest.put(Constants.FILTERS, Map.of(Constants.NAME, "MBA"));
+
+        SearchHit hit = mock(SearchHit.class);
+        when(hit.getSourceAsMap()).thenReturn(Map.of(Constants.NAME, "MBA"));
+
+        SearchHits hits = mock(SearchHits.class);
+        when(hits.getHits()).thenReturn(new SearchHit[]{hit});
+        when(hits.getTotalHits()).thenReturn(1L);
+
+        SearchResponse response = mock(SearchResponse.class);
+        when(response.getHits()).thenReturn(hits);
+
+        when(igotESClient.search(any(SearchRequest.class), eq(RequestOptions.DEFAULT)))
+                .thenReturn(response);
+
+        EsResponse result = masterDataService.searchMasterDataInIgotES("idx", "_doc", searchRequest);
+
+        assertTrue(result.isSuccess());
+    }
+
+    @Test
+    void searchMasterData_withStatusFilterAsString() throws Exception {
+        Map<String, Object> searchRequest = new HashMap<>();
+        searchRequest.put(Constants.FILTERS, Map.of(Constants.STATUS, "1"));
+
+        SearchHit hit = mock(SearchHit.class);
+        when(hit.getSourceAsMap()).thenReturn(Map.of(Constants.STATUS, 1));
+
+        SearchHits hits = mock(SearchHits.class);
+        when(hits.getHits()).thenReturn(new SearchHit[]{hit});
+        when(hits.getTotalHits()).thenReturn(1L);
+
+        SearchResponse response = mock(SearchResponse.class);
+        when(response.getHits()).thenReturn(hits);
+
+        when(igotESClient.search(any(SearchRequest.class), eq(RequestOptions.DEFAULT)))
+                .thenReturn(response);
+
+        EsResponse result = masterDataService.searchMasterDataInIgotES("idx", "_doc", searchRequest);
+
+        assertTrue(result.isSuccess());
+    }
+
+    @Test
+    void searchMasterData_filtersNotAMap() throws Exception {
+        Map<String, Object> searchRequest = new HashMap<>();
+        searchRequest.put(Constants.FILTERS, "not-a-map");
+
+        SearchHit hit = mock(SearchHit.class);
+        when(hit.getSourceAsMap()).thenReturn(Map.of(Constants.NAME, "MBA"));
+
+        SearchHits hits = mock(SearchHits.class);
+        when(hits.getHits()).thenReturn(new SearchHit[]{hit});
+        when(hits.getTotalHits()).thenReturn(1L);
+
+        SearchResponse response = mock(SearchResponse.class);
+        when(response.getHits()).thenReturn(hits);
+
+        when(igotESClient.search(any(SearchRequest.class), eq(RequestOptions.DEFAULT)))
+                .thenReturn(response);
+
+        EsResponse result = masterDataService.searchMasterDataInIgotES("idx", "_doc", searchRequest);
+
+        assertTrue(result.isSuccess());
+    }
+
+    @Test
     void searchMasterData_withPagination() throws Exception {
 
         Map<String, Object> searchRequest = Map.of(

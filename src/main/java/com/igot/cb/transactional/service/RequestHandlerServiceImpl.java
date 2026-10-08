@@ -64,7 +64,7 @@ public class RequestHandlerServiceImpl {
         } catch (JsonProcessingException e) {
             log.error(String.valueOf(e));
             try {
-                log.warn("Error Response: " + mapper.writeValueAsString(response));
+                log.warn("Error Response: {}", mapper.writeValueAsString(response));
             } catch (Exception e1) {
                 log.warn("Failed to serialize error response for logging", e1);
             }
@@ -101,7 +101,7 @@ public class RequestHandlerServiceImpl {
         } catch (Exception e) {
             log.error(String.valueOf(e));
             try {
-                log.warn("Error Response: " + mapper.writeValueAsString(response));
+                log.warn("Error Response: {}", mapper.writeValueAsString(response));
             } catch (Exception e1) {
                 log.warn("Failed to serialize error response for logging", e1);
             }

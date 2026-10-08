@@ -2,8 +2,10 @@ package com.igot.cb.transactional.cassandrautils;
 
 import com.datastax.oss.driver.api.core.ConsistencyLevel;
 import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.CqlSessionBuilder;
 import com.datastax.oss.driver.api.core.DefaultConsistencyLevel;
 import com.datastax.oss.driver.api.core.metadata.Metadata;
+import com.datastax.oss.driver.api.core.metadata.Node;
 import com.igot.cb.exceptions.CustomException;
 import com.igot.cb.util.Constants;
 import com.igot.cb.util.PropertiesCache;
@@ -12,11 +14,15 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.springframework.http.HttpStatus;
 
 import java.lang.reflect.Field;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.Assert.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -293,6 +299,194 @@ public class CassandraConnectionManagerImplTest {
                 assertEquals("ERROR", e.getCode());
                 assertTrue(e.getMessage().contains("For input string: \"invalid\""));
             }
+        }
+    }
+
+    /**
+     * Exercises the real (non-overridden) createCassandraConnectionWithKeySpaces() when the
+     * Cassandra host is blank, AND the real createCassandraConnection() catch/rethrow block,
+     * by invoking the real no-arg constructor directly. This covers lines 85-90 and 153-163.
+     */
+    @Test
+    public void testRealConstructor_MissingHostConfig_WrapsException() {
+        try (MockedStatic<PropertiesCache> propertiesCacheMock = mockStatic(PropertiesCache.class);
+             MockedStatic<Runtime> runtimeMock = mockStatic(Runtime.class)) {
+            propertiesCacheMock.when(PropertiesCache::getInstance).thenReturn(propertiesCache);
+            when(propertiesCache.getProperty(Constants.CASSANDRA_CONFIG_HOST)).thenReturn("");
+            runtimeMock.when(Runtime::getRuntime).thenReturn(mockRuntime);
+            doNothing().when(mockRuntime).addShutdownHook(any(Thread.class));
+
+            try {
+                new CassandraConnectionManagerImpl();
+                fail("Expected CustomException was not thrown");
+            } catch (CustomException e) {
+                assertEquals("ERROR", e.getCode());
+                assertEquals("Cassandra host is not configured", e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Exercises the full real success path of createCassandraConnectionWithKeySpaces() (no
+     * keyspace) via the real no-arg constructor: building the DriverConfigLoader, building a
+     * CqlSession via the (mocked) CqlSession.builder() chain, reading metadata/cluster name and
+     * iterating nodes, and the successful assignment in createCassandraConnection(). Covers
+     * lines 98-137 (null-keyspace branch) and line 153.
+     */
+    @Test
+    public void testRealConstructor_SuccessfulConnection_NoKeyspace() {
+        CqlSessionBuilder mockBuilder = mock(CqlSessionBuilder.class, Mockito.RETURNS_SELF);
+        when(mockBuilder.build()).thenReturn(mockSession);
+
+        Node mockNode = mock(Node.class);
+        when(mockNode.getDatacenter()).thenReturn("dc1");
+        when(mockNode.getRack()).thenReturn("rack1");
+        Map<UUID, Node> nodesMap = new HashMap<>();
+        nodesMap.put(UUID.randomUUID(), mockNode);
+
+        when(mockSession.getMetadata()).thenReturn(mockMetadata);
+        when(mockMetadata.getClusterName()).thenReturn(Optional.of("testCluster"));
+        when(mockMetadata.getNodes()).thenReturn(nodesMap);
+
+        try (MockedStatic<PropertiesCache> propertiesCacheMock = mockStatic(PropertiesCache.class);
+             MockedStatic<Runtime> runtimeMock = mockStatic(Runtime.class);
+             MockedStatic<CqlSession> cqlSessionStatic = mockStatic(CqlSession.class)) {
+            propertiesCacheMock.when(PropertiesCache::getInstance).thenReturn(propertiesCache);
+            when(propertiesCache.getProperty(anyString())).thenReturn("5");
+            when(propertiesCache.getProperty(Constants.CASSANDRA_CONFIG_HOST)).thenReturn("localhost");
+            runtimeMock.when(Runtime::getRuntime).thenReturn(mockRuntime);
+            doNothing().when(mockRuntime).addShutdownHook(any(Thread.class));
+            cqlSessionStatic.when(CqlSession::builder).thenReturn(mockBuilder);
+
+            CassandraConnectionManagerImpl realManager = new CassandraConnectionManagerImpl();
+            assertNotNull(realManager);
+        }
+    }
+
+    /**
+     * Exercises the real success path of createCassandraConnectionWithKeySpaces() WITH a
+     * keyspace supplied (the withKeyspace() branch, lines 115-121), plus multiple contact
+     * points, by calling the method directly (constructor's own connection attempt is
+     * suppressed via an override so it doesn't interfere).
+     */
+    @Test
+    public void testCreateCassandraConnectionWithKeySpaces_RealBuilder_WithKeyspace() {
+        CqlSessionBuilder mockBuilder = mock(CqlSessionBuilder.class, Mockito.RETURNS_SELF);
+        when(mockBuilder.build()).thenReturn(mockSession);
+
+        Node mockNode = mock(Node.class);
+        when(mockNode.getDatacenter()).thenReturn("dc1");
+        when(mockNode.getRack()).thenReturn("rack1");
+        Map<UUID, Node> nodesMap = new HashMap<>();
+        nodesMap.put(UUID.randomUUID(), mockNode);
+
+        when(mockSession.getMetadata()).thenReturn(mockMetadata);
+        when(mockMetadata.getClusterName()).thenReturn(Optional.of("testCluster"));
+        when(mockMetadata.getNodes()).thenReturn(nodesMap);
+
+        CassandraConnectionManagerImpl manager = new CassandraConnectionManagerImpl() {
+            @Override
+            public void createCassandraConnection() {
+                // no-op so the constructor itself doesn't attempt a real connection
+            }
+        };
+
+        try (MockedStatic<PropertiesCache> propertiesCacheMock = mockStatic(PropertiesCache.class);
+             MockedStatic<CqlSession> cqlSessionStatic = mockStatic(CqlSession.class)) {
+            propertiesCacheMock.when(PropertiesCache::getInstance).thenReturn(propertiesCache);
+            when(propertiesCache.getProperty(anyString())).thenReturn("5");
+            when(propertiesCache.getProperty(Constants.CASSANDRA_CONFIG_HOST)).thenReturn("host1,host2");
+            cqlSessionStatic.when(CqlSession::builder).thenReturn(mockBuilder);
+
+            CqlSession result = manager.createCassandraConnectionWithKeySpaces("myKeyspace");
+            assertSame(mockSession, result);
+        }
+    }
+
+    /**
+     * Covers the IllegalArgumentException branch of getConsistencyLevel() (lines 176-187) when
+     * the configured consistency level string doesn't match any DefaultConsistencyLevel enum.
+     */
+    @Test
+    public void testGetConsistencyLevel_InvalidLevel_ThrowsCustomException() {
+        try (MockedStatic<PropertiesCache> propertiesCacheMock = mockStatic(PropertiesCache.class)) {
+            PropertiesCache mockCache = mock(PropertiesCache.class);
+            propertiesCacheMock.when(PropertiesCache::getInstance).thenReturn(mockCache);
+            when(mockCache.readProperty(Constants.SUNBIRD_CASSANDRA_CONSISTENCY_LEVEL)).thenReturn("NOT_A_REAL_LEVEL");
+            try {
+                CassandraConnectionManagerImpl.getConsistencyLevel();
+                fail("Expected CustomException was not thrown");
+            } catch (CustomException e) {
+                assertEquals("ERROR", e.getCode());
+            }
+        }
+    }
+
+    /**
+     * Covers the real ResourceCleanUp.run() method (lines 205-218): it should close every
+     * session held in the static cassandraSessionMap as well as the static session field,
+     * without throwing when everything closes cleanly.
+     */
+    @Test
+    public void testResourceCleanUp_RealRun_ClosesSessionsSuccessfully() throws Exception {
+        Field mapField = CassandraConnectionManagerImpl.class.getDeclaredField("cassandraSessionMap");
+        mapField.setAccessible(true);
+        Map<String, CqlSession> sessionMap = (Map<String, CqlSession>) mapField.get(null);
+        sessionMap.clear();
+
+        CqlSession extraSession = mock(CqlSession.class);
+        sessionMap.put("extraKeyspace", extraSession);
+
+        Field sessionField = CassandraConnectionManagerImpl.class.getDeclaredField("session");
+        sessionField.setAccessible(true);
+        sessionField.set(null, mockSession);
+
+        try {
+            Class<?> cleanUpClass = Class.forName(
+                    "com.igot.cb.transactional.cassandrautils.CassandraConnectionManagerImpl$ResourceCleanUp");
+            java.lang.reflect.Constructor<?> ctor = cleanUpClass.getDeclaredConstructor();
+            ctor.setAccessible(true);
+            Thread cleanUp = (Thread) ctor.newInstance();
+            cleanUp.run();
+
+            verify(extraSession).close();
+            verify(mockSession).close();
+        } finally {
+            sessionMap.clear();
+            sessionField.set(null, null);
+        }
+    }
+
+    /**
+     * Covers the catch(Exception) branch inside ResourceCleanUp.run() (lines 215-216): when
+     * closing a session throws, the exception must be swallowed/logged rather than propagated.
+     */
+    @Test
+    public void testResourceCleanUp_RealRun_SwallowsExceptionOnClose() throws Exception {
+        Field mapField = CassandraConnectionManagerImpl.class.getDeclaredField("cassandraSessionMap");
+        mapField.setAccessible(true);
+        Map<String, CqlSession> sessionMap = (Map<String, CqlSession>) mapField.get(null);
+        sessionMap.clear();
+
+        CqlSession throwingSession = mock(CqlSession.class);
+        doThrow(new RuntimeException("close failed")).when(throwingSession).close();
+        sessionMap.put("faultyKeyspace", throwingSession);
+
+        Field sessionField = CassandraConnectionManagerImpl.class.getDeclaredField("session");
+        sessionField.setAccessible(true);
+        sessionField.set(null, null);
+
+        try {
+            Class<?> cleanUpClass = Class.forName(
+                    "com.igot.cb.transactional.cassandrautils.CassandraConnectionManagerImpl$ResourceCleanUp");
+            java.lang.reflect.Constructor<?> ctor = cleanUpClass.getDeclaredConstructor();
+            ctor.setAccessible(true);
+            Thread cleanUp = (Thread) ctor.newInstance();
+            // Should not throw despite the mocked session throwing on close().
+            cleanUp.run();
+            verify(throwingSession).close();
+        } finally {
+            sessionMap.clear();
         }
     }
 }

@@ -135,11 +135,11 @@ public class CassandraConnectionManagerImpl implements CassandraConnectionManage
                 logger.info("Datacenter: {}; Host: {}; Rack: {}", host.getDatacenter(), host.getEndPoint(), host.getRack());
             }
             return sessionWithKeyspaces;
-        } catch (Exception e) {
             // NOSONAR (S2139): no global exception handler exists for CustomException in this
             // app, so this bootstrap log is the only place the full stack trace is ever
             // captured; rethrowing (with message-only context, since CustomException has no
             // cause-carrying constructor) is required so callers fail fast on connection errors.
+        } catch (Exception e) { // NOSONAR
             logger.error("Error while creating Cassandra connection", e);
             throw new CustomException(
                     Constants.ERROR,
@@ -150,10 +150,14 @@ public class CassandraConnectionManagerImpl implements CassandraConnectionManage
 
     public void createCassandraConnection() {
         try {
-            session = createCassandraConnectionWithKeySpaces(null);
-        } catch (Exception e) {
+            // NOSONAR (S2696): kept as a non-static, overridable instance method intentionally -
+            // CassandraConnectionManagerImplTest spies/subclasses it (and the sibling
+            // createCassandraConnectionWithKeySpaces) to stub connection creation; making this
+            // static or the session field instance-scoped would break that test suite.
+            session = createCassandraConnectionWithKeySpaces(null); // NOSONAR
             // NOSONAR (S2139): see rationale above - bootstrap-critical, no global handler logs
             // CustomException elsewhere, so logging here plus rethrowing is intentional.
+        } catch (Exception e) { // NOSONAR
             logger.error("Error while creating Cassandra connection", e);
             throw new CustomException(
                     Constants.ERROR,
@@ -174,10 +178,10 @@ public class CassandraConnectionManagerImpl implements CassandraConnectionManage
             consistency = Constants.DEFAULT_SUNBIRD_CASSANDRA_CONSISTENCY_LEVEL;
         try {
             return DefaultConsistencyLevel.valueOf(consistency.toUpperCase());
-        } catch (IllegalArgumentException exception) {
             // NOSONAR (S2139): see rationale above createCassandraConnection() - no global
             // handler logs CustomException elsewhere, so this bootstrap log plus rethrow with
             // contextual message is intentional.
+        } catch (IllegalArgumentException exception) { // NOSONAR
             logger.error("CassandraConnectionManagerImpl:getConsistencyLevel: Exception occurred with error message: ",
                      exception);
             throw new CustomException(

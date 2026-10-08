@@ -321,4 +321,109 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
          verify(profileService).getAdditionalFieldsByOrg("", userOrgId, authToken, true);
      }
 
+     /**
+      * Test: Update additional fields for a user's profile.
+      * Endpoint: POST /user/profile/update/additionalFields
+      */
+     @Test
+     void testUpdateAdditionalFields() throws Exception {
+         String authToken = "test-auth-token";
+         String orgId = "org-123";
+         Map<String, Object> request = new HashMap<>();
+         request.put("field1", "value1");
+
+         ApiResponse mockResponse = ProjectUtil.createDefaultResponse("UPDATE_ADDITIONAL_FIELDS");
+
+         when(profileService.updateAdditionalFields(request, orgId, authToken)).thenReturn(mockResponse);
+
+         mockMvc.perform(post("/user/profile/update/additionalFields")
+                         .header(Constants.X_AUTH_TOKEN, authToken)
+                         .header(Constants.X_AUTH_USER_ORG_ID, orgId)
+                         .contentType(MediaType.APPLICATION_JSON)
+                         .content(objectMapper.writeValueAsString(request)))
+                 .andExpect(status().isOk());
+
+         verify(profileService).updateAdditionalFields(request, orgId, authToken);
+     }
+
+     /**
+      * Test: Get additional fields for a specific user by org (admin path variant).
+      * Endpoint: GET /user/profile/getAdditionalFields/{userId}/{orgId}
+      */
+     @Test
+     void testGetAdditionalFieldsByOrg() throws Exception {
+         String authToken = "test-auth-token";
+         String userId = "user-123";
+         String orgId = "org-123";
+
+         ApiResponse mockResponse = ProjectUtil.createDefaultResponse("GET_ADDITIONAL_FIELDS_BY_ORG");
+
+         when(profileService.getAdditionalFieldsByOrg(userId, orgId, authToken, false)).thenReturn(mockResponse);
+
+         mockMvc.perform(get("/user/profile/getAdditionalFields/{userId}/{orgId}", userId, orgId)
+                         .header(Constants.X_AUTH_TOKEN, authToken))
+                 .andExpect(status().isOk());
+
+         verify(profileService).getAdditionalFieldsByOrg(userId, orgId, authToken, false);
+     }
+
+     /**
+      * Test: Get basic profile for public endpoint (v2), which delegates to the v1 volunteer handler.
+      * Endpoint: GET /user/profile/v2/basic
+      */
+     @Test
+     void testGetBasicProfileForPublic() throws Exception {
+         String authToken = "test-auth-token";
+
+         ApiResponse mockResponse = ProjectUtil.createDefaultResponse("GET_BASIC_PROFILE");
+
+         when(profileService.getBasicProfile("", authToken, true)).thenReturn(mockResponse);
+
+         mockMvc.perform(get("/user/profile/v2/basic")
+                         .header(Constants.X_AUTH_TOKEN, authToken))
+                 .andExpect(status().isOk());
+
+         verify(profileService).getBasicProfile("", authToken, true);
+     }
+
+     /**
+      * Test: Get extended profile summary (v2), which delegates to the v1 ngo handler.
+      * Endpoint: GET /user/profile/v2/extended/all
+      */
+     @Test
+     void testGetExtendedProfileSummaryForUserV2() throws Exception {
+         String authToken = "test-auth-token";
+
+         ApiResponse mockResponse = ProjectUtil.createDefaultResponse("GET_EXTENDED_PROFILE");
+
+         when(profileService.getExtendedProfileSummary("", authToken)).thenReturn(mockResponse);
+
+         mockMvc.perform(get("/user/profile/v2/extended/all")
+                         .header(Constants.X_AUTH_TOKEN, authToken))
+                 .andExpect(status().isOk());
+
+         verify(profileService).getExtendedProfileSummary("", authToken);
+     }
+
+     /**
+      * Test: Get additional fields by org (v2), which delegates to the v1 ngo handler.
+      * Endpoint: GET /user/profile/v2/getAdditionalFields
+      */
+     @Test
+     void testGetAdditionalFieldsByOrgForUserV2() throws Exception {
+         String authToken = "test-auth-token";
+         String userOrgId = "org-789";
+
+         ApiResponse mockResponse = ProjectUtil.createDefaultResponse("GET_ADDITIONAL_FIELDS");
+
+         when(profileService.getAdditionalFieldsByOrg("", userOrgId, authToken, true)).thenReturn(mockResponse);
+
+         mockMvc.perform(get("/user/profile/v2/getAdditionalFields")
+                         .header(Constants.X_AUTH_TOKEN, authToken)
+                         .header(Constants.X_AUTH_USER_ORG_ID, userOrgId))
+                 .andExpect(status().isOk());
+
+         verify(profileService).getAdditionalFieldsByOrg("", userOrgId, authToken, true);
+     }
+
  }

@@ -2,9 +2,6 @@ package com.igot.cb.transactional.redis.cache;
 
 import java.util.*;
 
-import com.igot.cb.util.CbServerProperties;
-
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.RequiredArgsConstructor;
@@ -26,8 +23,6 @@ public class CacheService {
     private final JedisPool jedisPool;
 
     private final JedisPool jedisDataPopulationPool;
-
-    private final CbServerProperties serverProperties;
 
     private final ObjectMapper objectMapper;
 

@@ -1,7 +1,6 @@
 package com.igot.cb.transactional.redis.cache;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.igot.cb.util.CbServerProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,9 +28,6 @@ class CacheServiceTest {
 
     @Mock
     private Jedis jedis;
-
-    @Mock
-    private CbServerProperties serverProperties;
 
     @Mock
     private ObjectMapper objectMapper;
@@ -190,6 +186,60 @@ class CacheServiceTest {
     void getCourseMetadataAsJsonString_ReturnsEmptyMap_WhenValuesListIsEmpty() {
         when(jedis.mget("k1")).thenReturn(List.of());
         Map<String, String> result = cacheService.getCourseMetadataAsJsonString(List.of("k1"));
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void hget_DoesNotResetTTL_WhenTtlIsZeroOrLess() {
+        when(jedis.hmget("key", "field")).thenReturn(List.of("value"));
+        String result = cacheService.hget("key", 0, "field", 0);
+        assertEquals("value", result);
+        verify(jedis, never()).expire(anyString(), anyInt());
+    }
+
+    @Test
+    void hset_UsesProvidedTTL_WhenTtlIsPositive() {
+        cacheService.hset("key", 0, "field", "value", 500);
+        verify(jedis).hset("key", "field", "value");
+        verify(jedis).expire("key", 500);
+    }
+
+    @Test
+    void getCourseMetadataAsJsonString_SkipsNullValues_ButKeepsNonNullOnes() {
+        when(jedis.mget("k1", "k2")).thenReturn(Arrays.asList(null, "{\"b\":2}"));
+        Map<String, String> result = cacheService.getCourseMetadataAsJsonString(List.of("k1", "k2"));
+        assertEquals(1, result.size());
+        assertEquals("{\"b\":2}", result.get("k2"));
+        assertNull(result.get("k1"));
+    }
+
+    @Test
+    void removeCache_DeletesKey() {
+        cacheService.removeCache("key");
+        verify(jedis).del("key");
+    }
+
+    @Test
+    void removeCache_DoesNotThrow_OnException() {
+        doThrow(new RuntimeException("fail")).when(jedis).del("key");
+        cacheService.removeCache("key");
+        assertNotNull(cacheService);
+    }
+
+    @Test
+    void hgetList_ReturnsValuesForAllKeys() {
+        when(jedis.hmget("k1", "k1")).thenReturn(List.of("v1"));
+        when(jedis.hmget("k2", "k2")).thenReturn(List.of("v2"));
+        List<Object> result = cacheService.hget(List.of("k1", "k2"));
+        assertEquals(2, result.size());
+        assertEquals("v1", result.get(0));
+        assertEquals("v2", result.get(1));
+    }
+
+    @Test
+    void hgetList_ReturnsEmptyList_OnException() {
+        when(jedis.hmget(anyString(), anyString())).thenThrow(new RuntimeException("fail"));
+        List<Object> result = cacheService.hget(List.of("k1"));
         assertTrue(result.isEmpty());
     }
 }

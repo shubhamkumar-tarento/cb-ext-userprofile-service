@@ -86,7 +86,7 @@ public class CassandraOperationImpl implements CassandraOperation {
             logger.info("{}", response);
 
         } catch (Exception e) {
-            logger.error(Constants.EXCEPTION_MSG_FETCH + "{} : {}", tableName, e.getMessage(), e);
+            logger.error(Constants.EXCEPTION_MSG_FETCH + Constants.LOG_TABLE_ERROR_SUFFIX, tableName, e.getMessage(), e);
         }
         return response;
     }
@@ -164,13 +164,13 @@ public class CassandraOperationImpl implements CassandraOperation {
         } catch (Exception e) {
             if (e.getMessage().contains(Constants.UNKNOWN_IDENTIFIER)) {
                 logger.error(
-                        Constants.EXCEPTION_MSG_UPDATE + "{} : {}", tableName, e.getMessage(), e);
+                        Constants.EXCEPTION_MSG_UPDATE + Constants.LOG_TABLE_ERROR_SUFFIX, tableName, e.getMessage(), e);
                 String errMsg = String.format("Exception occurred while updating record to to %s %s", tableName,
                         e.getMessage());
                 response.put(Constants.RESPONSE, Constants.FAILED);
                 response.put(Constants.ERROR_MESSAGE, errMsg);
             }
-            logger.error(Constants.EXCEPTION_MSG_UPDATE + "{} : {}", tableName, e.getMessage(), e);
+            logger.error(Constants.EXCEPTION_MSG_UPDATE + Constants.LOG_TABLE_ERROR_SUFFIX, tableName, e.getMessage(), e);
         } finally {
             logQueryElapseTime("updateRecord", startTime, query);
         }

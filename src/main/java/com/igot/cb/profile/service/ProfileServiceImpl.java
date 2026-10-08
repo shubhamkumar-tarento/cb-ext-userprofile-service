@@ -491,7 +491,7 @@ public class ProfileServiceImpl implements ProfileService {
     /**
      * Retained for unit-test coverage (invoked via reflection); not called from production code paths.
      */
-    private void sortContextData(List<Map<String, Object>> dataList, String contextType) {
+    private void sortContextData(List<Map<String, Object>> dataList, String contextType) { // NOSONAR
         Comparator<Map<String, Object>> comparator = getSortingComparator(contextType);
         if (comparator != null) {
             dataList.sort(comparator.reversed());

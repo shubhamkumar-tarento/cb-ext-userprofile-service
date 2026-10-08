@@ -3,6 +3,7 @@ package com.igot.cb.transactional.cassandrautils;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
@@ -23,7 +24,10 @@ import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 
+import com.datastax.oss.driver.api.core.CqlIdentifier;
 import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.cql.ColumnDefinition;
+import com.datastax.oss.driver.api.core.cql.ColumnDefinitions;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.cql.Row;
 import com.datastax.oss.driver.api.core.cql.SimpleStatement;
@@ -151,6 +155,40 @@ public class CassandraUtilTest {
             assertEquals("123", rowMap.get("userId"));
             assertEquals("test@example.com", rowMap.get("email"));
         }
+    }
+
+    @Test
+    public void testFetchColumnsMapping_ReturnsExpectedMapping() {
+        ResultSet mockResultSet = mock(ResultSet.class);
+        ColumnDefinitions mockColumnDefinitions = mock(ColumnDefinitions.class);
+        ColumnDefinition mockColumnDefinition = mock(ColumnDefinition.class);
+        CqlIdentifier mockCqlIdentifier = mock(CqlIdentifier.class);
+
+        when(mockCqlIdentifier.asInternal()).thenReturn("id");
+        when(mockColumnDefinition.getName()).thenReturn(mockCqlIdentifier);
+        doAnswer(invocation -> {
+            java.util.function.Consumer<ColumnDefinition> consumer = invocation.getArgument(0);
+            consumer.accept(mockColumnDefinition);
+            return null;
+        }).when(mockColumnDefinitions).forEach(any());
+        when(mockResultSet.getColumnDefinitions()).thenReturn(mockColumnDefinitions);
+
+        Map<String, String> result = CassandraUtil.fetchColumnsMapping(mockResultSet);
+
+        assertEquals(1, result.size());
+        assertEquals("id", result.get("id"));
+    }
+
+    @Test
+    public void testFetchColumnsMapping_WithEmptyColumnDefinitions() {
+        ResultSet mockResultSet = mock(ResultSet.class);
+        ColumnDefinitions mockColumnDefinitions = mock(ColumnDefinitions.class);
+
+        when(mockResultSet.getColumnDefinitions()).thenReturn(mockColumnDefinitions);
+
+        Map<String, String> result = CassandraUtil.fetchColumnsMapping(mockResultSet);
+
+        assertEquals(0, result.size());
     }
 
     @Test

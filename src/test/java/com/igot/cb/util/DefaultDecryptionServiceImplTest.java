@@ -126,6 +126,46 @@ public class DefaultDecryptionServiceImplTest {
     }
 
     @Test
+    public void testDecryptDataListWhenEncryptionOff() throws Exception {
+        Field field = DefaultDecryptionServiceImpl.class.getDeclaredField("sunbirdEncryption");
+        field.setAccessible(true);
+        field.set(decryptionService, "OFF");
+        Map<String, Object> map1 = new HashMap<>();
+        map1.put("key1", "value1");
+        List<Map<String, Object>> testData = new ArrayList<>();
+        testData.add(map1);
+        List<Map<String, Object>> result = decryptionService.decryptData(testData);
+        assertEquals("List should remain unchanged when encryption is OFF", testData, result);
+        assertEquals("Value should remain unchanged", "value1", result.get(0).get("key1"));
+    }
+
+    @Test
+    public void testDecryptDataMapWithNullEntryValueWhenEncryptionOn() throws Exception {
+        // Covers the branch where an entry's value is null (not a Map/List)
+        // so it should be skipped and not passed to decrypt().
+        Field field = DefaultDecryptionServiceImpl.class.getDeclaredField("sunbirdEncryption");
+        field.setAccessible(true);
+        field.set(decryptionService, "ON");
+        Map<String, Object> testData = new HashMap<>();
+        testData.put("nullValue", null);
+        Map<String, Object> result = decryptionService.decryptData(testData);
+        assertNotNull("Result should not be null", result);
+        assertNull("Null value should remain null", result.get("nullValue"));
+    }
+
+    @Test
+    public void testEncryptThenDecryptRoundTripUsesRealCipher() {
+        // Exercises the real (non-mocked) success path of the static decrypt()
+        // method: base64 decode, AES doFinal, substring and loop iteration,
+        // by round-tripping a value through the real encrypt/decrypt ciphers.
+        String original = "roundTripValue123";
+        String encrypted = DefaultEncryptionServiceImpl.encrypt(original);
+        assertNotNull("Encrypted value should not be null", encrypted);
+        String decrypted = DefaultDecryptionServiceImpl.decrypt(encrypted, false);
+        assertEquals("Decrypted value should match the original", original, decrypted);
+    }
+
+    @Test
     public void testStaticDecryptMethod() throws Exception {
         Field cipherField = DefaultDecryptionServiceImpl.class.getDeclaredField("c");
         cipherField.setAccessible(true);

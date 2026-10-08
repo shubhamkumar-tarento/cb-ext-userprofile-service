@@ -18,7 +18,7 @@ public class PasswordResetController {
     }
 
     @GetMapping("/user/v2/reset/password")
-    public ResponseEntity<?> resetPassword(@RequestHeader(Constants.X_AUTH_TOKEN) String authToken){
+    public ResponseEntity<ApiResponse> resetPassword(@RequestHeader(Constants.X_AUTH_TOKEN) String authToken){
         ApiResponse apiResponse = passwordResetService.resetPassword(authToken);
         return new ResponseEntity<>(apiResponse, apiResponse.getResponseCode());
     }

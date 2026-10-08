@@ -432,6 +432,111 @@ class CompetencyAcquiredEventTest {
 
             assertEquals(localEvent, localEvent);
         }
+
+        @Test
+        @DisplayName("Should not be equal when eventType is null on one side only")
+        void testNotEqualsWhenEventTypeNullVsNonNull() {
+            CompetencyAcquiredEvent event1 = CompetencyAcquiredEvent.builder().eventType(null).build();
+            CompetencyAcquiredEvent event2 = CompetencyAcquiredEvent.builder().eventType("competency.acquired").build();
+
+            assertNotEquals(event1, event2);
+            assertNotEquals(event2, event1);
+        }
+
+        @Test
+        @DisplayName("Should not be equal when userId is null on one side only")
+        void testNotEqualsWhenUserIdNullVsNonNull() {
+            CompetencyAcquiredEvent event1 = CompetencyAcquiredEvent.builder().userId(null).build();
+            CompetencyAcquiredEvent event2 = CompetencyAcquiredEvent.builder().userId("user123").build();
+
+            assertNotEquals(event1, event2);
+            assertNotEquals(event2, event1);
+        }
+
+        @Test
+        @DisplayName("Should not be equal when contentId is null on one side only")
+        void testNotEqualsWhenContentIdNullVsNonNull() {
+            CompetencyAcquiredEvent event1 = CompetencyAcquiredEvent.builder().contentId(null).build();
+            CompetencyAcquiredEvent event2 = CompetencyAcquiredEvent.builder().contentId("content456").build();
+
+            assertNotEquals(event1, event2);
+            assertNotEquals(event2, event1);
+        }
+
+        @Test
+        @DisplayName("Should not be equal when batchId differs, including null vs non-null")
+        void testNotEqualsWithDifferentBatchId() {
+            CompetencyAcquiredEvent event1 = CompetencyAcquiredEvent.builder().batchId("batch1").build();
+            CompetencyAcquiredEvent event2 = CompetencyAcquiredEvent.builder().batchId("batch2").build();
+            CompetencyAcquiredEvent event3 = CompetencyAcquiredEvent.builder().batchId(null).build();
+
+            assertNotEquals(event1, event2);
+            assertNotEquals(event1, event3);
+            assertNotEquals(event3, event1);
+        }
+
+        @Test
+        @DisplayName("Should not be equal when contextType differs, including null vs non-null")
+        void testNotEqualsWithDifferentContextType() {
+            CompetencyAcquiredEvent event1 = CompetencyAcquiredEvent.builder().contextType("course").build();
+            CompetencyAcquiredEvent event2 = CompetencyAcquiredEvent.builder().contextType("assessment").build();
+            CompetencyAcquiredEvent event3 = CompetencyAcquiredEvent.builder().contextType(null).build();
+
+            assertNotEquals(event1, event2);
+            assertNotEquals(event1, event3);
+            assertNotEquals(event3, event1);
+        }
+
+        @Test
+        @DisplayName("Should not be equal when action differs, including null vs non-null")
+        void testNotEqualsWithDifferentAction() {
+            CompetencyAcquiredEvent event1 = CompetencyAcquiredEvent.builder().action("CREATE").build();
+            CompetencyAcquiredEvent event2 = CompetencyAcquiredEvent.builder().action("DELETE").build();
+            CompetencyAcquiredEvent event3 = CompetencyAcquiredEvent.builder().action(null).build();
+
+            assertNotEquals(event1, event2);
+            assertNotEquals(event1, event3);
+            assertNotEquals(event3, event1);
+        }
+
+        @Test
+        @DisplayName("Should not be equal when competencyIds differ, including null vs non-null")
+        void testNotEqualsWithDifferentCompetencyIds() {
+            List<Map<String, String>> list1 = new java.util.ArrayList<>();
+            list1.add(java.util.Collections.singletonMap("a", "1"));
+            List<Map<String, String>> list2 = new java.util.ArrayList<>();
+            list2.add(java.util.Collections.singletonMap("b", "2"));
+
+            CompetencyAcquiredEvent event1 = CompetencyAcquiredEvent.builder().competencyIds(list1).build();
+            CompetencyAcquiredEvent event2 = CompetencyAcquiredEvent.builder().competencyIds(list2).build();
+            CompetencyAcquiredEvent event3 = CompetencyAcquiredEvent.builder().competencyIds(null).build();
+
+            assertNotEquals(event1, event2);
+            assertNotEquals(event1, event3);
+            assertNotEquals(event3, event1);
+        }
+
+        @Test
+        @DisplayName("Should have different hashCode when batchId, contextType, action or competencyIds differ")
+        void testHashCodeDifferentForRemainingFields() {
+            List<Map<String, String>> list1 = new java.util.ArrayList<>();
+            list1.add(java.util.Collections.singletonMap("a", "1"));
+
+            CompetencyAcquiredEvent event1 = CompetencyAcquiredEvent.builder()
+                    .batchId("batch1")
+                    .contextType("course")
+                    .action("CREATE")
+                    .competencyIds(list1)
+                    .build();
+            CompetencyAcquiredEvent event2 = CompetencyAcquiredEvent.builder()
+                    .batchId("batch2")
+                    .contextType("assessment")
+                    .action("DELETE")
+                    .competencyIds(null)
+                    .build();
+
+            assertNotEquals(event1.hashCode(), event2.hashCode());
+        }
     }
 
     // ==================== ToString Tests ====================

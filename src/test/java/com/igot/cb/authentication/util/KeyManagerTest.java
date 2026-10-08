@@ -91,6 +91,35 @@ public class KeyManagerTest {
         assertNull(keyManager.getPublicKey("non-existent-key"));
     }
 
+    @Test
+    public void testInit_shouldHandleExceptionWhenBasePathInvalid() {
+        // Base path that does not exist should cause Files.walk to throw,
+        // which must be caught by the outer catch block in init()
+        when(propertiesCache.getProperty(Constants.ACCESS_TOKEN_PUBLICKEY_BASEPATH))
+                .thenReturn(tempDir.resolve("non-existent-sub-dir").toString());
+
+        keyManager.init();
+
+        assertNull(keyManager.getPublicKey("anything"));
+    }
+
+    @Test
+    public void testInit_shouldHandleExceptionWhenKeyFileContentInvalid() throws IOException {
+        // Content that is not valid base64 should cause loadPublicKey to throw,
+        // which must be caught by the inner catch block in init()
+        String invalidKeyFileName = "bad_key.pem";
+        String invalidContent = "not-a-valid-key***";
+        Path badKeyFile = tempDir.resolve(invalidKeyFileName);
+        Files.write(badKeyFile, invalidContent.getBytes(StandardCharsets.UTF_8));
+
+        when(propertiesCache.getProperty(Constants.ACCESS_TOKEN_PUBLICKEY_BASEPATH))
+                .thenReturn(tempDir.toString());
+
+        keyManager.init();
+
+        assertNull(keyManager.getPublicKey(invalidKeyFileName));
+    }
+
     private PublicKey generateTestKey() throws Exception {
         KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
         keyGen.initialize(2048);

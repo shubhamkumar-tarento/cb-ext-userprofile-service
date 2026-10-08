@@ -12,6 +12,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.http.HttpStatus;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -193,6 +194,119 @@ class ValidationServiceTest {
         ApiResponse api = new ApiResponse();
         boolean result = validationService.upsertInstituteValidation(api,
                 Map.of(Constants.REQUEST, Map.of(Constants.NAME, "St. Xavier's College")));
+        assertTrue(result);
+    }
+
+    // ---------- additional validateSearchRequest branch coverage ----------
+
+    @Test
+    void validateSearchRequest_nestedRequestMissing_createsEmptyRequestAndPasses() {
+        ApiResponse api = new ApiResponse();
+        Map<String, Object> requestBody = new HashMap<>();
+        requestBody.put("foo", "bar");
+        boolean result = validationService.validateSearchRequest(api, requestBody);
+        assertTrue(result);
+    }
+
+    @Test
+    void validateSearchRequest_validSearchString_returnsTrue() {
+        ApiResponse api = new ApiResponse();
+        boolean result = validationService.validateSearchRequest(api,
+                Map.of(Constants.REQUEST, Map.of(Constants.SEARCH_STRING, "hello")));
+        assertTrue(result);
+    }
+
+    @Test
+    void validateSearchRequest_pageSizeNotNumeric() {
+        ApiResponse api = new ApiResponse();
+        boolean result = validationService.validateSearchRequest(api,
+                Map.of(Constants.REQUEST, Map.of(Constants.PAGE_SIZE, "abc")));
+        assertFalse(result);
+        assertEquals("pageSize must be numeric", api.getParams().getErrMsg());
+    }
+
+    @Test
+    void validateSearchRequest_pageSizeValid_returnsTrue() {
+        ApiResponse api = new ApiResponse();
+        boolean result = validationService.validateSearchRequest(api,
+                Map.of(Constants.REQUEST, Map.of(Constants.PAGE_SIZE, 10)));
+        assertTrue(result);
+    }
+
+    @Test
+    void validateSearchRequest_sortByAllowed_returnsTrue() {
+        ApiResponse api = new ApiResponse();
+        boolean result = validationService.validateSearchRequest(api,
+                Map.of(Constants.REQUEST, Map.of(Constants.SORT_BY, "name")));
+        assertTrue(result);
+    }
+
+    @Test
+    void validateSearchRequest_requestFieldNotAMap_triggersCatchBlock() {
+        ApiResponse api = new ApiResponse();
+        boolean result = validationService.validateSearchRequest(api,
+                Map.of(Constants.REQUEST, "not-a-map"));
+        assertFalse(result);
+        assertEquals("Invalid request parameters", api.getParams().getErrMsg());
+    }
+
+    @Test
+    void validateSearchString_emptyKeyword_returnsTrue() {
+        ApiResponse api = new ApiResponse();
+        boolean result = validationService.validateSearchString("", api);
+        assertTrue(result);
+    }
+
+    // ---------- additional upsertDegreeValidation branch coverage ----------
+
+    @Test
+    void upsertDegreeValidation_requestFieldNotAMap_returnsFalse() {
+        ApiResponse api = new ApiResponse();
+        boolean result = validationService.upsertDegreeValidation(api,
+                Map.of(Constants.REQUEST, "not-a-map"));
+        assertFalse(result);
+    }
+
+    @Test
+    void upsertDegreeValidation_idValidNoStatus_returnsTrue() {
+        ApiResponse api = new ApiResponse();
+        boolean result = validationService.upsertDegreeValidation(api,
+                Map.of(Constants.REQUEST, Map.of(Constants.ID, 1)));
+        assertTrue(result);
+    }
+
+    @Test
+    void upsertDegreeValidation_statusValidNumericString_returnsTrue() {
+        ApiResponse api = new ApiResponse();
+        boolean result = validationService.upsertDegreeValidation(api,
+                Map.of(Constants.REQUEST, Map.of(Constants.ID, 1, Constants.STATUS, "1")));
+        assertTrue(result);
+    }
+
+    @Test
+    void upsertDegreeValidation_descriptionWithinLimit_returnsTrue() {
+        ApiResponse api = new ApiResponse();
+        boolean result = validationService.upsertDegreeValidation(api,
+                Map.of(Constants.REQUEST, Map.of(Constants.NAME, "MBA", Constants.DESCRIPTION, "short desc")));
+        assertTrue(result);
+    }
+
+    // ---------- additional upsertInstituteValidation branch coverage ----------
+
+    @Test
+    void upsertInstituteValidation_nameEmpty_whenNameFieldMissing() {
+        ApiResponse api = new ApiResponse();
+        boolean result = validationService.upsertInstituteValidation(api,
+                Map.of(Constants.REQUEST, Map.of("dummy", "x")));
+        assertFalse(result);
+        assertEquals("Institute name cannot be empty", api.getParams().getErrMsg());
+    }
+
+    @Test
+    void upsertInstituteValidation_success_whenRegexNotConfigured() {
+        ApiResponse api = new ApiResponse();
+        boolean result = validationService.upsertInstituteValidation(api,
+                Map.of(Constants.REQUEST, Map.of(Constants.NAME, "Valid College")));
         assertTrue(result);
     }
 }

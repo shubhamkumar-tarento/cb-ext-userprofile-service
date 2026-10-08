@@ -14,6 +14,9 @@ import com.igot.cb.util.CbServerProperties;
 import com.igot.cb.util.Constants;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -23,6 +26,7 @@ import org.springframework.http.HttpStatus;
 
 import java.time.LocalDate;
 import java.util.*;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -201,35 +205,25 @@ class AchievementServiceImplTest {
         verify(esClientService, times(1)).updateDocument(any(), any(), any(), any(), any());
     }
 
-    @Test
-    void testUpdateLearnerAchievement_userIdNotFound() {
-        Map<String, Object> requestData = new HashMap<>();
-        requestData.put(Constants.CONTEXT_TYPE, "testContext");
-        Map<String, Object> request = new HashMap<>();
-        request.put(Constants.REQUEST, requestData);
-        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("");
-        ApiResponse response = achievementService.updateLearnerAchievement(request, "token", "org1");
-        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+    static Stream<Arguments> updateLearnerAchievementBadRequestCases() {
+        return Stream.of(
+                // empty userId returned by the access token validator
+                Arguments.of("testContext", ""),
+                // invalid contextType in the request
+                Arguments.of("invalid", "user123"),
+                // valid contextType but no id in the request data
+                Arguments.of("testContext", "user123")
+        );
     }
 
-    @Test
-    void testUpdateLearnerAchievement_validationError() {
+    @ParameterizedTest
+    @MethodSource("updateLearnerAchievementBadRequestCases")
+    void testUpdateLearnerAchievement_returnsBadRequest(String contextType, String userId) {
         Map<String, Object> requestData = new HashMap<>();
-        requestData.put(Constants.CONTEXT_TYPE, "invalid");
+        requestData.put(Constants.CONTEXT_TYPE, contextType);
         Map<String, Object> request = new HashMap<>();
         request.put(Constants.REQUEST, requestData);
-        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
-        ApiResponse response = achievementService.updateLearnerAchievement(request, "token", "org1");
-        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
-    }
-
-    @Test
-    void testUpdateLearnerAchievement_missingIdOrContextType() {
-        Map<String, Object> requestData = new HashMap<>();
-        requestData.put(Constants.CONTEXT_TYPE, "testContext");
-        Map<String, Object> request = new HashMap<>();
-        request.put(Constants.REQUEST, requestData);
-        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn(userId);
         ApiResponse response = achievementService.updateLearnerAchievement(request, "token", "org1");
         assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
     }
@@ -2313,6 +2307,861 @@ class AchievementServiceImplTest {
         assertFalse(ctx.containsKey("trainingType"));
         assertFalse(ctx.containsKey("deliveryMode"));
         assertFalse(ctx.containsKey("issuedDate"));
+    }
+
+    // ==================== ADDITIONAL COVERAGE: updateLearnerAchievement early-exit branches ====================
+
+    @Test
+    void testUpdateLearnerAchievement_userIdNotFound_afterValidationPasses() {
+        Map<String, Object> contextData = new HashMap<>();
+        contextData.put("field1", "value1");
+        contextData.put("field2", "value2");
+        Map<String, Object> requestData = new HashMap<>();
+        requestData.put(Constants.ID, "achv1");
+        requestData.put(Constants.CONTEXT_TYPE, "testContext");
+        requestData.put(Constants.CONTEXT_DATA, contextData);
+        Map<String, Object> request = new HashMap<>();
+        request.put(Constants.REQUEST, requestData);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("");
+
+        ApiResponse response = achievementService.updateLearnerAchievement(request, "token", "org1");
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+        assertTrue(response.getParams().getErrMsg().contains("User Id not Found"));
+    }
+
+    @Test
+    void testUpdateLearnerAchievement_idBlank_returnsValidationResponse() {
+        Map<String, Object> contextData = new HashMap<>();
+        contextData.put("field1", "value1");
+        contextData.put("field2", "value2");
+        Map<String, Object> requestData = new HashMap<>();
+        requestData.put(Constants.CONTEXT_TYPE, "testContext");
+        requestData.put(Constants.CONTEXT_DATA, contextData);
+        Map<String, Object> request = new HashMap<>();
+        request.put(Constants.REQUEST, requestData);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
+
+        ApiResponse response = achievementService.updateLearnerAchievement(request, "token", "org1");
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+        assertTrue(response.getParams().getErrMsg().contains("id and contextType are mandatory"));
+    }
+
+    @Test
+    void testUpdateLearnerAchievement_urlFieldsMissing_returnsValidationResponse() {
+        Map<String, Object> contextData = new HashMap<>();
+        contextData.put("field1", "value1");
+        contextData.put("field2", "value2");
+        Map<String, Object> requestData = new HashMap<>();
+        requestData.put(Constants.ID, "achv1");
+        requestData.put(Constants.CONTEXT_TYPE, "testContext");
+        requestData.put(Constants.CONTEXT_DATA, contextData);
+        Map<String, Object> request = new HashMap<>();
+        request.put(Constants.REQUEST, requestData);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
+
+        ApiResponse response = achievementService.updateLearnerAchievement(request, "token", "org1");
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+        assertTrue(response.getParams().getErrMsg().contains("uploadedDocumentUrl and url fields must be present"));
+    }
+
+    @Test
+    void testUpdateLearnerAchievement_urlFieldsNull_returnsValidationResponse() {
+        Map<String, Object> contextData = new HashMap<>();
+        contextData.put("field1", "value1");
+        contextData.put("field2", "value2");
+        contextData.put(Constants.UPLOAD_DOCUMENT_URL, null);
+        contextData.put(Constants.URL, "someUrl");
+        Map<String, Object> requestData = new HashMap<>();
+        requestData.put(Constants.ID, "achv1");
+        requestData.put(Constants.CONTEXT_TYPE, "testContext");
+        requestData.put(Constants.CONTEXT_DATA, contextData);
+        Map<String, Object> request = new HashMap<>();
+        request.put(Constants.REQUEST, requestData);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
+
+        ApiResponse response = achievementService.updateLearnerAchievement(request, "token", "org1");
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+        assertTrue(response.getParams().getErrMsg().contains("must not be null"));
+    }
+
+    @Test
+    void testUpdateLearnerAchievement_urlFieldsBothBlank_returnsValidationResponse() {
+        Map<String, Object> contextData = new HashMap<>();
+        contextData.put("field1", "value1");
+        contextData.put("field2", "value2");
+        contextData.put(Constants.UPLOAD_DOCUMENT_URL, "");
+        contextData.put(Constants.URL, "");
+        Map<String, Object> requestData = new HashMap<>();
+        requestData.put(Constants.ID, "achv1");
+        requestData.put(Constants.CONTEXT_TYPE, "testContext");
+        requestData.put(Constants.CONTEXT_DATA, contextData);
+        Map<String, Object> request = new HashMap<>();
+        request.put(Constants.REQUEST, requestData);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
+
+        ApiResponse response = achievementService.updateLearnerAchievement(request, "token", "org1");
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+        assertTrue(response.getParams().getErrMsg().contains("Either uploadedDocumentUrl or url must have a value"));
+    }
+
+    @Test
+    void testUpdateLearnerAchievement_urlFieldsBothNonBlank_returnsValidationResponse() {
+        Map<String, Object> contextData = new HashMap<>();
+        contextData.put("field1", "value1");
+        contextData.put("field2", "value2");
+        contextData.put(Constants.UPLOAD_DOCUMENT_URL, "a");
+        contextData.put(Constants.URL, "b");
+        Map<String, Object> requestData = new HashMap<>();
+        requestData.put(Constants.ID, "achv1");
+        requestData.put(Constants.CONTEXT_TYPE, "testContext");
+        requestData.put(Constants.CONTEXT_DATA, contextData);
+        Map<String, Object> request = new HashMap<>();
+        request.put(Constants.REQUEST, requestData);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
+
+        ApiResponse response = achievementService.updateLearnerAchievement(request, "token", "org1");
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+        assertTrue(response.getParams().getErrMsg().contains("Exactly one of uploadedDocumentUrl or url must have a value"));
+    }
+
+    @Test
+    void testUpdateLearnerAchievement_skipsNullValueFieldsDuringMerge() throws Exception {
+        Map<String, Object> contextData = new HashMap<>();
+        contextData.put("field1", "value1");
+        contextData.put("field2", "value2");
+        contextData.put(Constants.UPLOAD_DOCUMENT_URL, "http://example.com/doc.pdf");
+        contextData.put(Constants.URL, "");
+        Map<String, Object> requestData = new HashMap<>();
+        requestData.put(Constants.ID, "achv1");
+        requestData.put(Constants.CONTEXT_TYPE, "testContext");
+        requestData.put(Constants.CONTEXT_DATA, contextData);
+        requestData.put("extraNullField", null); // should be skipped by updateExistingRecord
+        Map<String, Object> request = new HashMap<>();
+        request.put(Constants.REQUEST, requestData);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
+        Map<String, Object> existingRecord = new HashMap<>();
+        existingRecord.put(Constants.STATUS, Constants.PENDING);
+        existingRecord.put(Constants.CREATED_ON, LocalDate.now());
+        existingRecord.put(Constants.CONTEXT_DATA, "{}");
+        when(cassandraOperation.getRecordsByPropertiesByKey(any(), any(), any(), any(), any()))
+                .thenReturn(Collections.singletonList(existingRecord));
+        ApiResponse cassandraResponse = new ApiResponse();
+        cassandraResponse.put(Constants.RESPONSE, Constants.SUCCESS);
+        when(cassandraOperation.insertRecord(any(), any(), any())).thenReturn(cassandraResponse);
+        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+        when(objectMapper.readValue(anyString(), eq(Map.class))).thenReturn(new HashMap<>());
+
+        ApiResponse response = achievementService.updateLearnerAchievement(request, "token", "org1");
+
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+    }
+
+    @Test
+    void testUpdateLearnerAchievement_existingContextDataAbsent_createsNewContext() throws Exception {
+        Map<String, Object> contextData = new HashMap<>();
+        contextData.put("field1", "value1");
+        contextData.put("field2", "value2");
+        contextData.put(Constants.UPLOAD_DOCUMENT_URL, "http://example.com/doc.pdf");
+        contextData.put(Constants.URL, "");
+        Map<String, Object> requestData = new HashMap<>();
+        requestData.put(Constants.ID, "achv1");
+        requestData.put(Constants.CONTEXT_TYPE, "testContext");
+        requestData.put(Constants.CONTEXT_DATA, contextData);
+        Map<String, Object> request = new HashMap<>();
+        request.put(Constants.REQUEST, requestData);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
+        // existing record WITHOUT a contextData key at all
+        Map<String, Object> existingRecord = new HashMap<>();
+        existingRecord.put(Constants.STATUS, Constants.PENDING);
+        existingRecord.put(Constants.CREATED_ON, LocalDate.now());
+        when(cassandraOperation.getRecordsByPropertiesByKey(any(), any(), any(), any(), any()))
+                .thenReturn(Collections.singletonList(existingRecord));
+        ApiResponse cassandraResponse = new ApiResponse();
+        cassandraResponse.put(Constants.RESPONSE, Constants.SUCCESS);
+        when(cassandraOperation.insertRecord(any(), any(), any())).thenReturn(cassandraResponse);
+        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+
+        ApiResponse response = achievementService.updateLearnerAchievement(request, "token", "org1");
+
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+    }
+
+    @Test
+    void testUpdateLearnerAchievement_createdOnFallbackToLocalDate() throws Exception {
+        Map<String, Object> contextData = new HashMap<>();
+        contextData.put("field1", "value1");
+        contextData.put("field2", "value2");
+        contextData.put(Constants.UPLOAD_DOCUMENT_URL, "http://example.com/doc.pdf");
+        contextData.put(Constants.URL, "");
+        Map<String, Object> requestData = new HashMap<>();
+        requestData.put(Constants.ID, "achv1");
+        requestData.put(Constants.CONTEXT_TYPE, "testContext");
+        requestData.put(Constants.CONTEXT_DATA, contextData);
+        Map<String, Object> request = new HashMap<>();
+        request.put(Constants.REQUEST, requestData);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
+        when(cbServerProperties.isRequireEs()).thenReturn(true);
+        Map<String, Object> existingRecord = new HashMap<>();
+        existingRecord.put(Constants.STATUS, Constants.PENDING);
+        existingRecord.put(Constants.CREATED_ON, LocalDate.now());
+        existingRecord.put(Constants.CONTEXT_DATA, "{}");
+        when(cassandraOperation.getRecordsByPropertiesByKey(any(), any(), any(), any(), any()))
+                .thenReturn(Collections.singletonList(existingRecord));
+        ApiResponse cassandraResponse = new ApiResponse();
+        cassandraResponse.put(Constants.RESPONSE, Constants.SUCCESS);
+        when(cassandraOperation.insertRecord(any(), any(), any())).thenReturn(cassandraResponse);
+        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+        when(objectMapper.convertValue(any(), eq(Map.class))).thenReturn(new HashMap<>());
+        when(objectMapper.readValue(anyString(), eq(Map.class))).thenReturn(new HashMap<>());
+        // ES doc empty -> forces fallback to existingRecord's createdOn (a LocalDate)
+        when(esClientService.readDocument(any(), any())).thenReturn(new HashMap<>());
+        when(esClientService.searchDocuments(any(), any())).thenReturn(new SearchResult());
+
+        ApiResponse response = achievementService.updateLearnerAchievement(request, "token", "org1");
+
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        verify(esClientService, times(1)).updateDocument(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void testUpdateLearnerAchievement_createdOnFallbackNull_whenNoUsableCreatedOn() throws Exception {
+        Map<String, Object> contextData = new HashMap<>();
+        contextData.put("field1", "value1");
+        contextData.put("field2", "value2");
+        contextData.put(Constants.UPLOAD_DOCUMENT_URL, "http://example.com/doc.pdf");
+        contextData.put(Constants.URL, "");
+        Map<String, Object> requestData = new HashMap<>();
+        requestData.put(Constants.ID, "achv1");
+        requestData.put(Constants.CONTEXT_TYPE, "testContext");
+        requestData.put(Constants.CONTEXT_DATA, contextData);
+        Map<String, Object> request = new HashMap<>();
+        request.put(Constants.REQUEST, requestData);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
+        when(cbServerProperties.isRequireEs()).thenReturn(true);
+        Map<String, Object> existingRecord = new HashMap<>();
+        existingRecord.put(Constants.STATUS, Constants.PENDING);
+        // No CREATED_ON field at all, and contextData is a String to be parsed
+        existingRecord.put(Constants.CONTEXT_DATA, "{}");
+        when(cassandraOperation.getRecordsByPropertiesByKey(any(), any(), any(), any(), any()))
+                .thenReturn(Collections.singletonList(existingRecord));
+        ApiResponse cassandraResponse = new ApiResponse();
+        cassandraResponse.put(Constants.RESPONSE, Constants.SUCCESS);
+        when(cassandraOperation.insertRecord(any(), any(), any())).thenReturn(cassandraResponse);
+        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+        when(objectMapper.convertValue(any(), eq(Map.class))).thenReturn(new HashMap<>());
+        when(objectMapper.readValue(anyString(), eq(Map.class))).thenReturn(new HashMap<>());
+        when(esClientService.readDocument(any(), any())).thenReturn(new HashMap<>());
+        when(esClientService.searchDocuments(any(), any())).thenReturn(new SearchResult());
+
+        ApiResponse response = achievementService.updateLearnerAchievement(request, "token", "org1");
+
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        verify(esClientService, times(1)).updateDocument(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void testUpdateLearnerAchievement_cassandraReadException_returnsNotFound() {
+        Map<String, Object> contextData = new HashMap<>();
+        contextData.put("field1", "value1");
+        contextData.put("field2", "value2");
+        contextData.put(Constants.UPLOAD_DOCUMENT_URL, "http://example.com/doc.pdf");
+        contextData.put(Constants.URL, "");
+        Map<String, Object> requestData = new HashMap<>();
+        requestData.put(Constants.ID, "achv1");
+        requestData.put(Constants.CONTEXT_TYPE, "testContext");
+        requestData.put(Constants.CONTEXT_DATA, contextData);
+        Map<String, Object> request = new HashMap<>();
+        request.put(Constants.REQUEST, requestData);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
+        when(cassandraOperation.getRecordsByPropertiesByKey(any(), any(), any(), any(), any()))
+                .thenThrow(new RuntimeException("DB failure"));
+
+        ApiResponse response = achievementService.updateLearnerAchievement(request, "token", "org1");
+
+        assertEquals(HttpStatus.NOT_FOUND, response.getResponseCode());
+    }
+
+    @Test
+    void testUpdateLearnerAchievement_competencyWithMissingRefIds_usesEmptyStrings() throws Exception {
+        List<Map<String, String>> newCompetencies = new ArrayList<>();
+        Map<String, String> newCompetency = new HashMap<>();
+        // Intentionally omit all ref-id keys so getStringValueFromObject returns "" for each
+        newCompetencies.add(newCompetency);
+
+        Map<String, Object> newContextData = new HashMap<>();
+        newContextData.put("field1", "value1");
+        newContextData.put("field2", "value2");
+        newContextData.put(Constants.UPLOAD_DOCUMENT_URL, "http://example.com/doc.pdf");
+        newContextData.put(Constants.URL, "");
+        newContextData.put(Constants.COMPETENCIES_V6, newCompetencies);
+
+        Map<String, Object> requestData = new HashMap<>();
+        requestData.put(Constants.ID, "achv1");
+        requestData.put(Constants.CONTEXT_TYPE, "testContext");
+        requestData.put(Constants.CONTEXT_DATA, newContextData);
+        Map<String, Object> request = new HashMap<>();
+        request.put(Constants.REQUEST, requestData);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
+        Map<String, Object> existingRecord = new HashMap<>();
+        existingRecord.put(Constants.STATUS, Constants.PENDING);
+        existingRecord.put(Constants.CREATED_ON, LocalDate.now());
+        existingRecord.put(Constants.USER_ID_RQST, "user123");
+        Map<String, Object> existingContextData = new HashMap<>();
+        existingRecord.put(Constants.CONTEXT_DATA, existingContextData);
+
+        when(cassandraOperation.getRecordsByPropertiesByKey(any(), any(), any(), any(), any()))
+                .thenReturn(Collections.singletonList(existingRecord));
+        ApiResponse cassandraResponse = new ApiResponse();
+        cassandraResponse.put(Constants.RESPONSE, Constants.SUCCESS);
+        when(cassandraOperation.insertRecord(any(), any(), any())).thenReturn(cassandraResponse);
+        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+
+        ApiResponse response = achievementService.updateLearnerAchievement(request, "token", "org1");
+
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        verify(kafkaEventPublisher, times(1)).publish(anyString(), (Object) any(), anyString());
+    }
+
+    @Test
+    void testUpdateLearnerAchievement_duplicateCompetencyKeys_mergedInMap() throws Exception {
+        List<Map<String, String>> newCompetencies = new ArrayList<>();
+        for (int i = 0; i < 2; i++) {
+            Map<String, String> comp = new HashMap<>();
+            comp.put(Constants.COMPETENCY_AREA_REF_ID, "dup_area");
+            comp.put(Constants.COMPETENCY_THEME_REF_ID, "dup_theme");
+            comp.put(Constants.COMPETENCY_SUB_THEME_REF_ID, "dup_sub");
+            newCompetencies.add(comp);
+        }
+
+        Map<String, Object> newContextData = new HashMap<>();
+        newContextData.put("field1", "value1");
+        newContextData.put("field2", "value2");
+        newContextData.put(Constants.UPLOAD_DOCUMENT_URL, "http://example.com/doc.pdf");
+        newContextData.put(Constants.URL, "");
+        newContextData.put(Constants.COMPETENCIES_V6, newCompetencies);
+
+        Map<String, Object> requestData = new HashMap<>();
+        requestData.put(Constants.ID, "achv1");
+        requestData.put(Constants.CONTEXT_TYPE, "testContext");
+        requestData.put(Constants.CONTEXT_DATA, newContextData);
+        Map<String, Object> request = new HashMap<>();
+        request.put(Constants.REQUEST, requestData);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
+        Map<String, Object> existingRecord = new HashMap<>();
+        existingRecord.put(Constants.STATUS, Constants.PENDING);
+        existingRecord.put(Constants.CREATED_ON, LocalDate.now());
+        existingRecord.put(Constants.USER_ID_RQST, "user123");
+        existingRecord.put(Constants.CONTEXT_DATA, new HashMap<>());
+
+        when(cassandraOperation.getRecordsByPropertiesByKey(any(), any(), any(), any(), any()))
+                .thenReturn(Collections.singletonList(existingRecord));
+        ApiResponse cassandraResponse = new ApiResponse();
+        cassandraResponse.put(Constants.RESPONSE, Constants.SUCCESS);
+        when(cassandraOperation.insertRecord(any(), any(), any())).thenReturn(cassandraResponse);
+        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+
+        ApiResponse response = achievementService.updateLearnerAchievement(request, "token", "org1");
+
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        verify(kafkaEventPublisher, times(1)).publish(anyString(), (Object) any(), anyString());
+    }
+
+    @Test
+    void testUpdateLearnerAchievement_kafkaPublishThrows_isSwallowed() throws Exception {
+        List<Map<String, String>> newCompetencies = new ArrayList<>();
+        Map<String, String> newCompetency = new HashMap<>();
+        newCompetency.put(Constants.COMPETENCY_AREA_REF_ID, "area1");
+        newCompetency.put(Constants.COMPETENCY_THEME_REF_ID, "theme1");
+        newCompetency.put(Constants.COMPETENCY_SUB_THEME_REF_ID, "sub1");
+        newCompetencies.add(newCompetency);
+
+        Map<String, Object> newContextData = new HashMap<>();
+        newContextData.put("field1", "value1");
+        newContextData.put("field2", "value2");
+        newContextData.put(Constants.UPLOAD_DOCUMENT_URL, "http://example.com/doc.pdf");
+        newContextData.put(Constants.URL, "");
+        newContextData.put(Constants.COMPETENCIES_V6, newCompetencies);
+
+        Map<String, Object> requestData = new HashMap<>();
+        requestData.put(Constants.ID, "achv1");
+        requestData.put(Constants.CONTEXT_TYPE, "testContext");
+        requestData.put(Constants.CONTEXT_DATA, newContextData);
+        Map<String, Object> request = new HashMap<>();
+        request.put(Constants.REQUEST, requestData);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
+        Map<String, Object> existingRecord = new HashMap<>();
+        existingRecord.put(Constants.STATUS, Constants.PENDING);
+        existingRecord.put(Constants.CREATED_ON, LocalDate.now());
+        existingRecord.put(Constants.USER_ID_RQST, "user123");
+        existingRecord.put(Constants.CONTEXT_DATA, new HashMap<>());
+
+        when(cassandraOperation.getRecordsByPropertiesByKey(any(), any(), any(), any(), any()))
+                .thenReturn(Collections.singletonList(existingRecord));
+        ApiResponse cassandraResponse = new ApiResponse();
+        cassandraResponse.put(Constants.RESPONSE, Constants.SUCCESS);
+        when(cassandraOperation.insertRecord(any(), any(), any())).thenReturn(cassandraResponse);
+        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+        doThrow(new RuntimeException("kafka down"))
+                .when(kafkaEventPublisher).publish(anyString(), (Object) any(), anyString());
+
+        ApiResponse response = achievementService.updateLearnerAchievement(request, "token", "org1");
+
+        // Exception inside publishCompetencyDeltaEvent must be swallowed; update still succeeds
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+    }
+
+    // ==================== ADDITIONAL COVERAGE: deleteLearnerAchievement ES exception ====================
+
+    @Test
+    void testDeleteLearnerAchievement_esDeleteThrowsException_stillSucceeds() {
+        Map<String, Object> reqMap = new HashMap<>();
+        reqMap.put(Constants.ID, "achv1");
+        reqMap.put(Constants.CONTEXT_TYPE, "testContext");
+        Map<String, Object> request = new HashMap<>();
+        request.put(Constants.REQUEST, reqMap);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
+        when(cbServerProperties.isRequireEs()).thenReturn(true);
+        Map<String, Object> cassandraResponse = new HashMap<>();
+        cassandraResponse.put(Constants.RESPONSE, Constants.SUCCESS);
+        when(cassandraOperation.deleteRecordByCompositeKey(any(), any(), any())).thenReturn(cassandraResponse);
+        doThrow(new RuntimeException("ES delete failed")).when(esClientService).deleteDocument(any(), any());
+
+        ApiResponse response = achievementService.deleteLearnerAchievement(request, "token");
+
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        verify(esClientService, never()).searchDocuments(any(), any());
+    }
+
+    // ==================== ADDITIONAL COVERAGE: statusUpdateLearnerAchievement exception & branches ====================
+
+    @Test
+    void testStatusUpdateLearnerAchievement_unexpectedException_returnsInternalServerError() {
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
+        Map<String, Object> reqMap = new HashMap<>();
+        reqMap.put("id", "achv1");
+        reqMap.put("contextType", "testContext");
+        reqMap.put("learnerId", "user123");
+        reqMap.put(Constants.STATUS, "APPROVED");
+        reqMap.put("reason", "test");
+        Map<String, Object> request = new HashMap<>();
+        request.put(Constants.REQUEST, reqMap);
+
+        when(cassandraOperation.getAllRecordsByPrimaryKey(any(), any(), any(), any(), anyInt()))
+                .thenThrow(new RuntimeException("DB down"));
+
+        ApiResponse response = achievementService.statusUpdateLearnerAchievement(request, "token");
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getResponseCode());
+        assertTrue(response.getParams().getErrMsg().contains("Exception occurred"));
+    }
+
+    @Test
+    void testStatusUpdateLearnerAchievement_missingRequiredContextType_returnsBadRequest() {
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
+        Map<String, Object> reqMap = new HashMap<>();
+        reqMap.put("id", "achv1");
+        // contextType intentionally missing - requiredFields = "id,contextType"
+        reqMap.put("learnerId", "user123");
+        reqMap.put(Constants.STATUS, "APPROVED");
+        reqMap.put("reason", "test");
+        Map<String, Object> request = new HashMap<>();
+        request.put(Constants.REQUEST, reqMap);
+
+        ApiResponse response = achievementService.statusUpdateLearnerAchievement(request, "token");
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+        assertTrue(response.getParams().getErrMsg().contains("Missing required field"));
+    }
+
+    @Test
+    void testStatusUpdateLearnerAchievement_updatedOnPresentInEsDoc_isCarriedOver() {
+        Map<String, Object> reqMap = new HashMap<>();
+        reqMap.put("id", "achv1");
+        reqMap.put("contextType", "testContext");
+        reqMap.put("learnerId", "user123");
+        reqMap.put(Constants.STATUS, "APPROVED");
+        reqMap.put("reason", "approved");
+        Map<String, Object> request = new HashMap<>();
+        request.put(Constants.REQUEST, reqMap);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
+        Map<String, Object> recordMap = new HashMap<>();
+        recordMap.put(Constants.STATUS, Constants.PENDING);
+        recordMap.put(Constants.CREATED_ON, LocalDate.now());
+        recordMap.put("id", "achv1");
+        when(cassandraOperation.getAllRecordsByPrimaryKey(any(), any(), any(), any(), anyInt()))
+                .thenReturn(Collections.singletonList(recordMap));
+        Map<String, Object> cassandraResponse = new HashMap<>();
+        cassandraResponse.put(Constants.RESPONSE, Constants.SUCCESS);
+        when(cassandraOperation.updateRecordByCompositeKey(any(), any(), any(), any())).thenReturn(cassandraResponse);
+        Map<String, Object> esDoc = new HashMap<>();
+        esDoc.put(Constants.CREATED_ON, "2024-01-01T00:00:00.000+0000");
+        esDoc.put(Constants.UPDATED_ON, "2024-05-01T00:00:00.000+0000");
+        when(esClientService.readDocument(any(), any())).thenReturn(esDoc);
+
+        ApiResponse response = achievementService.statusUpdateLearnerAchievement(request, "token");
+
+        assertEquals("Achievement status updated successfully", response.getResult().get("message"));
+        verify(esClientService, times(1)).updateDocument(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void testStatusUpdateLearnerAchievement_esReadDocumentThrows_updateStillSucceeds() {
+        Map<String, Object> reqMap = new HashMap<>();
+        reqMap.put("id", "achv1");
+        reqMap.put("contextType", "testContext");
+        reqMap.put("learnerId", "user123");
+        reqMap.put(Constants.STATUS, "APPROVED");
+        reqMap.put("reason", "approved");
+        Map<String, Object> request = new HashMap<>();
+        request.put(Constants.REQUEST, reqMap);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
+        Map<String, Object> recordMap = new HashMap<>();
+        recordMap.put(Constants.STATUS, Constants.PENDING);
+        recordMap.put(Constants.CREATED_ON, LocalDate.now());
+        recordMap.put("id", "achv1");
+        when(cassandraOperation.getAllRecordsByPrimaryKey(any(), any(), any(), any(), anyInt()))
+                .thenReturn(Collections.singletonList(recordMap));
+        Map<String, Object> cassandraResponse = new HashMap<>();
+        cassandraResponse.put(Constants.RESPONSE, Constants.SUCCESS);
+        when(cassandraOperation.updateRecordByCompositeKey(any(), any(), any(), any())).thenReturn(cassandraResponse);
+        when(esClientService.readDocument(any(), any())).thenThrow(new RuntimeException("ES down"));
+
+        ApiResponse response = achievementService.statusUpdateLearnerAchievement(request, "token");
+
+        // ES failure is caught internally inside updateAchievementInES; status update itself still succeeds
+        assertEquals("Achievement status updated successfully", response.getResult().get("message"));
+    }
+
+    @Test
+    void testStatusUpdateLearnerAchievement_contextDataInvalidJson_fallsBackToEmptyMap() throws Exception {
+        Map<String, Object> recordMap = new HashMap<>();
+        recordMap.put(Constants.STATUS, Constants.PENDING);
+        recordMap.put("contextdata", "{invalid json}");
+        recordMap.put(Constants.CREATED_ON, LocalDate.now());
+
+        when(cassandraOperation.getAllRecordsByPrimaryKey(any(), any(), any(), any(), anyInt()))
+                .thenReturn(Collections.singletonList(recordMap));
+        when(objectMapper.readValue(eq("{invalid json}"), eq(Map.class)))
+                .thenThrow(new RuntimeException("bad json"));
+        when(esClientService.readDocument(any(), any())).thenReturn(new HashMap<>());
+        Map<String, Object> cassandraResponse = new HashMap<>();
+        cassandraResponse.put(Constants.RESPONSE, Constants.SUCCESS);
+        when(cassandraOperation.updateRecordByCompositeKey(any(), any(), any(), any())).thenReturn(cassandraResponse);
+
+        Map<String, Object> req = new HashMap<>();
+        req.put("id", "1");
+        req.put("contextType", "testContext");
+        req.put("learnerId", "user");
+        req.put(Constants.STATUS, "APPROVED");
+        req.put("reason", "ok");
+        Map<String, Object> request = new HashMap<>();
+        request.put(Constants.REQUEST, req);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user");
+
+        ApiResponse response = achievementService.statusUpdateLearnerAchievement(request, "token");
+
+        assertEquals("Achievement status updated successfully", response.getResult().get("message"));
+        verify(esClientService).updateDocument(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void testStatusUpdateLearnerAchievement_contextDataNonStringNonMap_returnsEmptyObject() {
+        Map<String, Object> recordMap = new HashMap<>();
+        recordMap.put(Constants.STATUS, Constants.PENDING);
+        recordMap.put("contextdata", 12345); // neither String nor Map
+        recordMap.put(Constants.CREATED_ON, LocalDate.now());
+
+        when(cassandraOperation.getAllRecordsByPrimaryKey(any(), any(), any(), any(), anyInt()))
+                .thenReturn(Collections.singletonList(recordMap));
+        when(esClientService.readDocument(any(), any())).thenReturn(new HashMap<>());
+        Map<String, Object> cassandraResponse = new HashMap<>();
+        cassandraResponse.put(Constants.RESPONSE, Constants.SUCCESS);
+        when(cassandraOperation.updateRecordByCompositeKey(any(), any(), any(), any())).thenReturn(cassandraResponse);
+
+        Map<String, Object> req = new HashMap<>();
+        req.put("id", "1");
+        req.put("contextType", "testContext");
+        req.put("learnerId", "user");
+        req.put(Constants.STATUS, "APPROVED");
+        req.put("reason", "ok");
+        Map<String, Object> request = new HashMap<>();
+        request.put(Constants.REQUEST, req);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user");
+
+        ApiResponse response = achievementService.statusUpdateLearnerAchievement(request, "token");
+
+        assertEquals("Achievement status updated successfully", response.getResult().get("message"));
+    }
+
+    @Test
+    void testStatusUpdateLearnerAchievement_createdOnFromRecordString_whenEsDocEmpty() {
+        Map<String, Object> recordMap = new HashMap<>();
+        recordMap.put(Constants.STATUS, Constants.PENDING);
+        recordMap.put(Constants.CREATED_ON, "2024-01-01T00:00:00.000+0000"); // already a String
+
+        when(cassandraOperation.getAllRecordsByPrimaryKey(any(), any(), any(), any(), anyInt()))
+                .thenReturn(Collections.singletonList(recordMap));
+        when(esClientService.readDocument(any(), any())).thenReturn(new HashMap<>()); // empty -> fallback
+        Map<String, Object> cassandraResponse = new HashMap<>();
+        cassandraResponse.put(Constants.RESPONSE, Constants.SUCCESS);
+        when(cassandraOperation.updateRecordByCompositeKey(any(), any(), any(), any())).thenReturn(cassandraResponse);
+
+        Map<String, Object> req = new HashMap<>();
+        req.put("id", "1");
+        req.put("contextType", "testContext");
+        req.put("learnerId", "user");
+        req.put(Constants.STATUS, "APPROVED");
+        req.put("reason", "ok");
+        Map<String, Object> request = new HashMap<>();
+        request.put(Constants.REQUEST, req);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user");
+
+        ApiResponse response = achievementService.statusUpdateLearnerAchievement(request, "token");
+
+        assertEquals("Achievement status updated successfully", response.getResult().get("message"));
+    }
+
+    @Test
+    void testStatusUpdateLearnerAchievement_createdOnMissingAndUnusable_fallsBackToNull() {
+        Map<String, Object> recordMap = new HashMap<>();
+        recordMap.put(Constants.STATUS, Constants.PENDING);
+        // No CREATED_ON field at all
+
+        when(cassandraOperation.getAllRecordsByPrimaryKey(any(), any(), any(), any(), anyInt()))
+                .thenReturn(Collections.singletonList(recordMap));
+        when(esClientService.readDocument(any(), any())).thenReturn(new HashMap<>());
+        Map<String, Object> cassandraResponse = new HashMap<>();
+        cassandraResponse.put(Constants.RESPONSE, Constants.SUCCESS);
+        when(cassandraOperation.updateRecordByCompositeKey(any(), any(), any(), any())).thenReturn(cassandraResponse);
+
+        Map<String, Object> req = new HashMap<>();
+        req.put("id", "1");
+        req.put("contextType", "testContext");
+        req.put("learnerId", "user");
+        req.put(Constants.STATUS, "APPROVED");
+        req.put("reason", "ok");
+        Map<String, Object> request = new HashMap<>();
+        request.put(Constants.REQUEST, req);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user");
+
+        ApiResponse response = achievementService.statusUpdateLearnerAchievement(request, "token");
+
+        assertEquals("Achievement status updated successfully", response.getResult().get("message"));
+    }
+
+    // ==================== ADDITIONAL COVERAGE: getAchievementFromCassandra exception path ====================
+
+    @Test
+    void testReadLearnerAchievement_cassandraThrowsException_returnsNotFound() {
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
+        when(cacheService.getCache(any())).thenReturn(null);
+        when(cassandraOperation.getRecordsByPropertiesByKey(any(), any(), any(), any(), any()))
+                .thenThrow(new RuntimeException("Cassandra down"));
+
+        ApiResponse response = achievementService.readLearnerAchievement("achv1", "token", "testContext");
+
+        assertEquals(HttpStatus.NOT_FOUND, response.getResponseCode());
+    }
+
+    // ==================== ADDITIONAL COVERAGE: Instant handling in getUserAchievements ====================
+
+    @Test
+    void testGetUserAchievements_instantCreatedOn_parsedSuccessfully() {
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
+        when(cacheService.getCache(anyString())).thenReturn(null);
+        when(cbServerProperties.getCassandraFetchLimit()).thenReturn(100);
+
+        List<Map<String, Object>> achievements = new ArrayList<>();
+        Map<String, Object> achievement1 = new HashMap<>();
+        achievement1.put(Constants.ID, "achv1");
+        achievement1.put(Constants.CONTEXT_DATA, new HashMap<>());
+        achievement1.put(Constants.CREATED_ON, java.time.Instant.now());
+        achievements.add(achievement1);
+
+        when(cassandraOperation.getRecordsByPropertiesWithoutFiltering(any(), any(), any(), any(), anyInt()))
+                .thenReturn(achievements);
+
+        ApiResponse response = achievementService.getUserAchievements("token", null);
+
+        assertEquals(HttpStatus.OK, response.getResponseCode());
+        Map<String, Object> searchResults = (Map<String, Object>) response.getResult().get(Constants.SEARCH_RESULTS);
+        List<Map<String, Object>> resultData = (List<Map<String, Object>>) searchResults.get(Constants.DATA);
+        assertEquals(1, resultData.size());
+        assertTrue(resultData.get(0).get(Constants.CREATED_ON) instanceof String);
+    }
+
+    // ==================== ADDITIONAL COVERAGE: validateAllowedFields recursive validation ====================
+
+    @Test
+    void testCreateLearnerAchievement_allowedFields_disallowedTopLevelField_fails() {
+        when(cbServerProperties.getAchievementsAllowedFields()).thenReturn("contextType,contextData,field1,field2");
+
+        Map<String, Object> contextData = new HashMap<>();
+        contextData.put("field1", "value1");
+        contextData.put("field2", "value2");
+        Map<String, Object> requestData = new HashMap<>();
+        requestData.put(Constants.CONTEXT_TYPE, "testContext");
+        requestData.put(Constants.SOURCE, "source"); // not in allowed list
+        requestData.put(Constants.CONTEXT_DATA, contextData);
+        Map<String, Object> request = new HashMap<>();
+        request.put(Constants.REQUEST, requestData);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
+
+        ApiResponse response = achievementService.createLearnerAchievement(request, "token", "org1");
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+        assertTrue(response.getParams().getErrMsg().contains("Invalid field in request"));
+    }
+
+    @Test
+    void testCreateLearnerAchievement_allowedFields_disallowedNestedField_fails() {
+        when(cbServerProperties.getAchievementsAllowedFields()).thenReturn("contextType,contextData,field1,field2");
+
+        Map<String, Object> contextData = new HashMap<>();
+        contextData.put("field1", "value1");
+        contextData.put("field2", "value2");
+        contextData.put("extraField", "notAllowed");
+        Map<String, Object> requestData = new HashMap<>();
+        requestData.put(Constants.CONTEXT_TYPE, "testContext");
+        requestData.put(Constants.CONTEXT_DATA, contextData);
+        Map<String, Object> request = new HashMap<>();
+        request.put(Constants.REQUEST, requestData);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
+
+        ApiResponse response = achievementService.createLearnerAchievement(request, "token", "org1");
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+        assertTrue(response.getParams().getErrMsg().contains("extraField"));
+    }
+
+    @Test
+    void testCreateLearnerAchievement_allowedFields_disallowedFieldInsideList_fails() {
+        when(cbServerProperties.getAchievementsAllowedFields()).thenReturn("contextType,contextData,field1,field2,items");
+
+        Map<String, Object> listItem = new HashMap<>();
+        listItem.put("badField", "x");
+        Map<String, Object> contextData = new HashMap<>();
+        contextData.put("field1", "value1");
+        contextData.put("field2", "value2");
+        contextData.put("items", List.of(listItem));
+        Map<String, Object> requestData = new HashMap<>();
+        requestData.put(Constants.CONTEXT_TYPE, "testContext");
+        requestData.put(Constants.CONTEXT_DATA, contextData);
+        Map<String, Object> request = new HashMap<>();
+        request.put(Constants.REQUEST, requestData);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
+
+        ApiResponse response = achievementService.createLearnerAchievement(request, "token", "org1");
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+        assertTrue(response.getParams().getErrMsg().contains("badField"));
+    }
+
+    @Test
+    void testCreateLearnerAchievement_allowedFields_listOfValidItems_passesValidation() {
+        when(cbServerProperties.getAchievementsAllowedFields()).thenReturn("contextType,contextData,field1,field2,items");
+
+        Map<String, Object> listItem = new HashMap<>();
+        listItem.put("field1", "x");
+        Map<String, Object> contextData = new HashMap<>();
+        contextData.put("field1", "value1");
+        contextData.put("field2", "value2");
+        contextData.put("items", List.of(listItem));
+        Map<String, Object> requestData = new HashMap<>();
+        // Use an invalid contextType so we short-circuit right after allowed-fields validation passes,
+        // without needing to mock the full create-success chain.
+        requestData.put(Constants.CONTEXT_TYPE, "wrongType");
+        requestData.put(Constants.CONTEXT_DATA, contextData);
+        Map<String, Object> request = new HashMap<>();
+        request.put(Constants.REQUEST, requestData);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
+
+        ApiResponse response = achievementService.createLearnerAchievement(request, "token", "org1");
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+        // Reaching the contextType check proves allowed-fields validation (including list recursion) passed
+        assertTrue(response.getParams().getErrMsg().contains("Invalid contextType"));
+    }
+
+    @Test
+    void testCreateLearnerAchievement_mandatoryFieldMissingEntirely_returnsError() {
+        Map<String, Object> contextData = new HashMap<>();
+        contextData.put("field1", "value1");
+        // field2 entirely absent (not just blank)
+        Map<String, Object> requestData = new HashMap<>();
+        requestData.put(Constants.CONTEXT_TYPE, "testContext");
+        requestData.put(Constants.CONTEXT_DATA, contextData);
+        Map<String, Object> request = new HashMap<>();
+        request.put(Constants.REQUEST, requestData);
+
+        when(accessTokenValidator.fetchUserIdFromAccessToken(anyString())).thenReturn("user123");
+
+        ApiResponse response = achievementService.createLearnerAchievement(request, "token", "org1");
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getResponseCode());
+        assertTrue(response.getParams().getErrMsg().contains("field2 is mandatory and missing"));
+    }
+
+    // ==================== ADDITIONAL COVERAGE: fetchUserDetails null / missing-key filtering ====================
+
+    @Test
+    void testSearchLearnerAchievements_redisResultsWithNullAndMissingKeyEntries_areFiltered() throws Exception {
+        SearchCriteria criteria = new SearchCriteria();
+        SearchResult searchResult = new SearchResult();
+        Map<String, Object> achievement = new HashMap<>();
+        achievement.put(Constants.USER_ID, "user1");
+        searchResult.setData(new ArrayList<>(List.of(achievement)));
+
+        when(valueOperations.get(anyString())).thenReturn(null);
+        when(esClientService.searchDocuments(any(), any())).thenReturn(searchResult);
+
+        List<Object> redisResults = new ArrayList<>();
+        redisResults.add(null);
+        Map<String, Object> noIdMap = new HashMap<>();
+        noIdMap.put("other", "x");
+        redisResults.add(noIdMap);
+        Map<String, Object> validMap = new HashMap<>();
+        validMap.put(Constants.USER_ID_KEY, "user1");
+        validMap.put(Constants.FIRST_NAME_KEY, "John");
+        redisResults.add(validMap);
+        when(cacheService.hget(any())).thenReturn(redisResults);
+
+        ApiResponse response = achievementService.searchLearnerAchievements(criteria, "token");
+
+        assertNotNull(response);
+        assertTrue(response.getResult().containsKey(Constants.SEARCH_RESULTS));
+        verify(cassandraOperation, never()).getRecordsByPropertiesWithoutFiltering(any(), any(), any(), any(), any());
     }
 
 }

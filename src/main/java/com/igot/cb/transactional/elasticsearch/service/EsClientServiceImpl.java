@@ -23,11 +23,9 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.igot.cb.exceptions.CustomException;
-import com.igot.cb.transactional.elasticsearch.config.EsClientConfig;
 import com.igot.cb.transactional.elasticsearch.dto.FacetDTO;
 import com.igot.cb.transactional.elasticsearch.dto.SearchCriteria;
 import com.igot.cb.transactional.elasticsearch.dto.SearchResult;
-import com.igot.cb.util.CbServerProperties;
 import com.igot.cb.util.Constants;
 import com.networknt.schema.JsonSchemaFactory;
 import com.networknt.schema.SpecVersion;
@@ -48,15 +46,10 @@ public class EsClientServiceImpl implements EsClientService {
 
     private final ElasticsearchClient elasticsearchClient;
     private final ObjectMapper objectMapper;
-    private final CbServerProperties cbServerProperties;
-    private final CbServerProperties serverConfig;
 
-    public EsClientServiceImpl(ElasticsearchClient elasticsearchClient, EsClientConfig esConnection,
-            ObjectMapper objectMapper, CbServerProperties cbServerProperties, CbServerProperties serverConfig) {
+    public EsClientServiceImpl(ElasticsearchClient elasticsearchClient, ObjectMapper objectMapper) {
         this.elasticsearchClient = elasticsearchClient;
         this.objectMapper = objectMapper;
-        this.cbServerProperties = cbServerProperties;
-        this.serverConfig = serverConfig;
     }
 
 

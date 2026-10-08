@@ -1,10 +1,12 @@
 package com.igot.cb.transactional.redis.config;
 
+import com.igot.cb.transactional.elasticsearch.dto.SearchResult;
 import com.igot.cb.util.CbServerProperties;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.RedisTemplate;
 import redis.clients.jedis.JedisPool;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -54,5 +56,20 @@ class RedisConfigTest {
 
         JedisPool pool = redisConfig.jedisDataPopulationPool();
         assertNotNull(pool);
+    }
+
+    @Test
+    void searchResultRedisTemplate_ReturnsConfiguredRedisTemplate() {
+        when(cbProperties.getRedisHostName()).thenReturn("localhost");
+        when(cbProperties.getRedisPort()).thenReturn("6379");
+
+        RedisConfig redisConfig = new RedisConfig(cbProperties);
+
+        RedisTemplate<String, SearchResult> template = redisConfig.searchResultRedisTemplate();
+
+        assertNotNull(template);
+        assertNotNull(template.getConnectionFactory());
+        assertNotNull(template.getKeySerializer());
+        assertNotNull(template.getValueSerializer());
     }
 }

@@ -28,6 +28,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class OutboundRequestHandlerServiceImpl {
 
+    private static final String FAILED_TO_PARSE_ERROR_RESPONSE_BODY = "Failed to parse error response body";
+
     private final RestTemplate restTemplate;
 
     public Object fetchUsingGetWithHeadersProfile(String uri, Map<String, String> headersValues) {
@@ -53,7 +55,7 @@ public class OutboundRequestHandlerServiceImpl {
                         new TypeReference<HashMap<String, Object>>() {
                         });
             } catch (Exception e1) {
-                log.warn("Failed to parse error response body", e1);
+                log.warn(FAILED_TO_PARSE_ERROR_RESPONSE_BODY, e1);
             }
             log.error("Error received: {}", e.getResponseBodyAsString(), e);
         } catch (Exception e) {
@@ -89,7 +91,7 @@ public class OutboundRequestHandlerServiceImpl {
                         new TypeReference<HashMap<String, Object>>() {
                         });
             } catch (Exception e1) {
-                log.warn("Failed to parse error response body", e1);
+                log.warn(FAILED_TO_PARSE_ERROR_RESPONSE_BODY, e1);
             }
             log.error("Error received: {}", e.getResponseBodyAsString(), e);
         }
@@ -136,7 +138,7 @@ public class OutboundRequestHandlerServiceImpl {
                     return mapper.readValue(ex.getResponseBodyAsString(), new TypeReference<Map<String, Object>>() {});
                 }
             } catch (Exception parseEx) {
-                log.warn("Failed to parse error response body", parseEx);
+                log.warn(FAILED_TO_PARSE_ERROR_RESPONSE_BODY, parseEx);
             }
 
         } catch (JsonProcessingException ex) {

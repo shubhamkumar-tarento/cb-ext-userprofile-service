@@ -25,13 +25,14 @@ public class CharacterDecoderTest {
         }
 
         @Override
-        protected void decodeBufferPrefix(PushbackInputStream aStream, OutputStream bStream)
-                throws IOException {
+        protected void decodeBufferPrefix(PushbackInputStream aStream, OutputStream bStream) {
+            // Intentionally no-op: this test double has no buffer prefix to consume.
         }
 
         @Override
         protected void decodeBufferSuffix(PushbackInputStream aStream, OutputStream bStream)
                 throws IOException {
+            // Intentionally no-op: this test double has no buffer suffix to consume.
         }
 
         @Override
@@ -93,8 +94,7 @@ public class CharacterDecoderTest {
             private int callCount = 0;
 
             @Override
-            protected void decodeBufferPrefix(PushbackInputStream aStream, OutputStream bStream)
-                    throws IOException {
+            protected void decodeBufferPrefix(PushbackInputStream aStream, OutputStream bStream) {
                 super.decodeBufferPrefix(aStream, bStream);
                 methodsCalled[0] = true;
             }
@@ -214,5 +214,89 @@ public class CharacterDecoderTest {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         decoder.decodeLineSuffix(inputStream, outputStream);
         assertTrue("decodeLineSuffix should be called", decoder.lineSuffixCalled);
+    }
+
+    /** A decoder that relies entirely on the default (no-op / throwing) implementations
+     * provided by CharacterDecoder itself, so we can exercise those default method bodies
+     * directly (protected members are accessible from tests in the same package). */
+    private static class MinimalDecoder extends CharacterDecoder {
+        @Override
+        protected int bytesPerAtom() {
+            return 2;
+        }
+
+        @Override
+        protected int bytesPerLine() {
+            return 4;
+        }
+    }
+
+    @Test
+    public void testDefaultDecodeLineSuffix_IsNoOp() throws IOException {
+        MinimalDecoder minimalDecoder = new MinimalDecoder();
+        PushbackInputStream inputStream = new PushbackInputStream(new ByteArrayInputStream(new byte[0]));
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        // Should not throw and should not write anything, since the default implementation is a NOP.
+        minimalDecoder.decodeLineSuffix(inputStream, outputStream);
+        assertEquals(0, outputStream.size());
+    }
+
+    @Test
+    public void testDefaultDecodeBufferPrefixAndSuffix_AreNoOps() throws IOException {
+        MinimalDecoder minimalDecoder = new MinimalDecoder();
+        PushbackInputStream inputStream = new PushbackInputStream(new ByteArrayInputStream(new byte[0]));
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        minimalDecoder.decodeBufferPrefix(inputStream, outputStream);
+        minimalDecoder.decodeBufferSuffix(inputStream, outputStream);
+        assertEquals(0, outputStream.size());
+    }
+
+    @Test
+    public void testDefaultDecodeLinePrefix_ReturnsBytesPerLine() throws IOException {
+        MinimalDecoder minimalDecoder = new MinimalDecoder();
+        PushbackInputStream inputStream = new PushbackInputStream(new ByteArrayInputStream(new byte[0]));
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        int result = minimalDecoder.decodeLinePrefix(inputStream, outputStream);
+        assertEquals(minimalDecoder.bytesPerLine(), result);
+    }
+
+    @Test(expected = IOException.class)
+    public void testDefaultDecodeAtom_ThrowsIOException() throws IOException {
+        MinimalDecoder minimalDecoder = new MinimalDecoder();
+        PushbackInputStream inputStream = new PushbackInputStream(new ByteArrayInputStream(new byte[0]));
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        // Default decodeAtom implementation always throws IOException.
+        minimalDecoder.decodeAtom(inputStream, outputStream, 1);
+    }
+
+    @Test
+    public void testDecodeBuffer_HitsUnequalRemainderBranch() throws IOException {
+        // bytesPerAtom = 3 and a line length of 4 makes (i + bytesPerAtom) != length after the
+        // loop exits, forcing the decodeBuffer(...) else-branch: decodeAtom(ps, bStream, length - i).
+        TestDecoder remainderDecoder = new TestDecoder() {
+            private int callCount = 0;
+
+            @Override
+            protected int bytesPerAtom() {
+                return 3;
+            }
+
+            @Override
+            protected int decodeLinePrefix(PushbackInputStream aStream, OutputStream bStream)
+                    throws IOException {
+                callCount++;
+                if (callCount > 1) {
+                    throw new IOException("End of test input");
+                }
+                return 4;
+            }
+        };
+        byte[] inputData = new byte[]{1, 2, 3, 4, 5, 6, 7, 8};
+        ByteArrayInputStream inputStream = new ByteArrayInputStream(inputData);
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+
+        remainderDecoder.decodeBuffer(inputStream, outputStream);
+
+        assertTrue("atom decode should have been invoked", remainderDecoder.atomCalls > 0);
     }
 }

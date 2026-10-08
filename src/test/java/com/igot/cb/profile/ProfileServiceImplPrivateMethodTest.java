@@ -240,6 +240,25 @@ class ProfileServiceImplPrivateMethodTest {
     }
 
     @Test
+    void testGetUserKarmaPoints_CacheMiss_RecordsFound_ReturnsTotalPointsAndCaches() {
+        String userId = "user-karma-1";
+        String redisKey = "user:karmaPoints:" + userId;
+
+        when(cacheService.getCache(redisKey)).thenReturn(null);
+        List<Map<String, Object>> records = List.of(Map.of(Constants.TOTAL_POINTS, 77));
+        when(cassandraOperation.getRecordsByPropertiesByKey(
+                eq(Constants.KEYSPACE_SUNBIRD),
+                eq(Constants.USER_KARMA_POINTS_SUMMARY_TABLE),
+                anyMap(), anyList(), eq(userId)))
+                .thenReturn(records);
+
+        int points = ReflectionTestUtils.invokeMethod(profileService, "getUserKarmaPoints", userId);
+
+        assertEquals(77, points);
+        Mockito.verify(cacheService).putCache(redisKey, 77);
+    }
+
+    @Test
     void testGetUserBadgeCount_CassandraThrowsException_ReturnsZero() {
         String userId = "userCassandraError";
         String redisKey = "user:badgeCount_" + userId;

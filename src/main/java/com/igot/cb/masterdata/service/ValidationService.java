@@ -5,6 +5,7 @@ import com.igot.cb.util.CbServerProperties;
 import com.igot.cb.util.Constants;
 import com.igot.cb.util.ProjectUtil;
 import org.apache.commons.collections4.MapUtils;
+import java.util.Collections;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.StringUtils;
 import lombok.RequiredArgsConstructor;
@@ -122,7 +123,7 @@ public class ValidationService {
 
     public boolean upsertDegreeValidation(ApiResponse apiResponse, Map<String, Object> requestBody) {
         Map<String, Object> requestMap = extractRequestMap(apiResponse, requestBody);
-        if (requestMap == null) {
+        if (MapUtils.isEmpty(requestMap)) {
             return false;
         }
         Object id = requestMap.get(Constants.ID);
@@ -150,7 +151,7 @@ public class ValidationService {
 
     public boolean upsertInstituteValidation(ApiResponse apiResponse, Map<String, Object> requestBody) {
         Map<String, Object> requestMap = extractRequestMap(apiResponse, requestBody);
-        if (requestMap == null) {
+        if (MapUtils.isEmpty(requestMap)) {
             return false;
         }
         Object id = requestMap.get(Constants.ID);
@@ -183,12 +184,12 @@ public class ValidationService {
     private Map<String, Object> extractRequestMap(ApiResponse apiResponse, Map<String, Object> requestBody) {
         if (MapUtils.isEmpty(requestBody)) {
             ProjectUtil.errorResponse(apiResponse, INVALID_REQUEST, HttpStatus.BAD_REQUEST);
-            return null;
+            return Collections.emptyMap();
         }
         Object reqObj = requestBody.get(Constants.REQUEST);
         if (!(reqObj instanceof Map) || MapUtils.isEmpty((Map<?, ?>) reqObj)) {
             ProjectUtil.errorResponse(apiResponse, INVALID_REQUEST, HttpStatus.BAD_REQUEST);
-            return null;
+            return Collections.emptyMap();
         }
         return (Map<String, Object>) reqObj;
     }

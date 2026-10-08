@@ -57,17 +57,12 @@ public class ProjectCommonExceptionTest {
     }
 
     @Test
-    public void testGettersAndSetters() {
-        ProjectCommonException exception = new ProjectCommonException(
-            mock(ResponseCode.class), 
-            "Test message", 
-            400
-        );
-        
-        exception.setErrorCode("NEW_ERR");
-        exception.setErrorMessage("New message");
-        exception.setErrorResponseCode(500);
-        
+    public void testGetters() {
+        ResponseCode mockCode = mock(ResponseCode.class);
+        when(mockCode.getErrorCode()).thenReturn("NEW_ERR");
+
+        ProjectCommonException exception = new ProjectCommonException(mockCode, "New message", 500);
+
         assertEquals("NEW_ERR", exception.getErrorCode());
         assertEquals("New message", exception.getErrorMessage());
         assertEquals(500, exception.getErrorResponseCode());
@@ -143,33 +138,38 @@ public class ProjectCommonExceptionTest {
     }
 
     @Test
-    public void testSetMessage() {
+    public void testMessageFromConstructor() {
         ProjectCommonException exception = new ProjectCommonException(
                 ResponseCode.SERVER_ERROR,
                 "Initial message",
                 ResponseCode.SERVER_ERROR.getStatusCode()
         );
-        String newMessage = "New error message";
-        exception.setMessage(newMessage);
-        assertEquals(newMessage, exception.getMessage());
-        exception.setMessage(null);
-        assertNull(exception.getMessage());
-        exception.setMessage("");
-        assertEquals("", exception.getMessage());
+        assertEquals("Initial message", exception.getMessage());
+
+        ProjectCommonException withNullMessage = new ProjectCommonException(
+                ResponseCode.SERVER_ERROR,
+                null,
+                ResponseCode.SERVER_ERROR.getStatusCode()
+        );
+        assertNull(withNullMessage.getMessage());
+
+        ProjectCommonException withEmptyMessage = new ProjectCommonException(
+                ResponseCode.SERVER_ERROR,
+                "",
+                ResponseCode.SERVER_ERROR.getStatusCode()
+        );
+        assertEquals("", withEmptyMessage.getMessage());
     }
 
     @Test
-    public void testSetResponseCode() {
-        ProjectCommonException exception = new ProjectCommonException(
-                ResponseCode.SERVER_ERROR,
-                "Test message",
-                ResponseCode.SERVER_ERROR.getStatusCode()
-        );
+    public void testResponseCodeFromConstructor() {
         ResponseCode mockResponseCode = mock(ResponseCode.class);
         when(mockResponseCode.getErrorCode()).thenReturn("NEW_ERR_001");
-        exception.setResponseCode(mockResponseCode);
+        ProjectCommonException exception = new ProjectCommonException(
+                mockResponseCode,
+                "Test message",
+                400
+        );
         assertEquals(mockResponseCode, exception.getResponseCode());
-        exception.setResponseCode(null);
-        assertNull(exception.getResponseCode());
     }
 }

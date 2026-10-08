@@ -23,9 +23,11 @@ public abstract class CharacterEncoder {
 
     /**
      * Encode the prefix for the entire buffer. By default is simply opens the PrintStream for use by
-     * the other functions.
+     * the other functions. The {@code throws IOException} is kept even though the default body never
+     * throws: CharacterEncoderTest overrides this exact signature to force an IOException and assert
+     * CharacterEncoder.encodeBuffer's internal-error handling.
      */
-    protected void encodeBufferPrefix(OutputStream aStream) throws IOException {
+    protected void encodeBufferPrefix(OutputStream aStream) throws IOException { // NOSONAR
         pStream = new PrintStream(aStream);
     }
 
@@ -63,35 +65,40 @@ public abstract class CharacterEncoder {
      * a final line that is shorter than bytesPerLine().
      */
     public void encode(InputStream inStream, OutputStream outStream) throws IOException {
-        int j;
-        int numBytes;
         byte[] tmpbuffer = new byte[bytesPerLine()];
 
         encodeBufferPrefix(outStream);
 
         boolean hasMoreData = true;
         while (hasMoreData) {
-            numBytes = readFully(inStream, tmpbuffer);
+            int numBytes = readFully(inStream, tmpbuffer);
             if (numBytes == 0) {
                 hasMoreData = false;
             } else {
-                encodeLinePrefix(outStream, numBytes);
-                for (j = 0; j < numBytes; j += bytesPerAtom()) {
-
-                    if ((j + bytesPerAtom()) <= numBytes) {
-                        encodeAtom(outStream, tmpbuffer, j, bytesPerAtom());
-                    } else {
-                        encodeAtom(outStream, tmpbuffer, j, (numBytes) - j);
-                    }
-                }
-                if (numBytes < bytesPerLine()) {
-                    hasMoreData = false;
-                } else {
-                    encodeLineSuffix();
-                }
+                hasMoreData = encodeLine(outStream, tmpbuffer, numBytes);
             }
         }
         encodeBufferSuffix(outStream);
+    }
+
+    /**
+     * Encodes a single line of {@code numBytes} bytes from {@code tmpbuffer} and returns whether
+     * there may be more data to encode (i.e. this line was full, so the stream might continue).
+     */
+    private boolean encodeLine(OutputStream outStream, byte[] tmpbuffer, int numBytes) throws IOException {
+        encodeLinePrefix(outStream, numBytes);
+        for (int j = 0; j < numBytes; j += bytesPerAtom()) {
+            if ((j + bytesPerAtom()) <= numBytes) {
+                encodeAtom(outStream, tmpbuffer, j, bytesPerAtom());
+            } else {
+                encodeAtom(outStream, tmpbuffer, j, (numBytes) - j);
+            }
+        }
+        if (numBytes < bytesPerLine()) {
+            return false;
+        }
+        encodeLineSuffix();
+        return true;
     }
 
     /**

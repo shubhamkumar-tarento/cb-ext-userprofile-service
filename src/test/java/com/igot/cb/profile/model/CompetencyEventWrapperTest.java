@@ -339,6 +339,28 @@ class CompetencyEventWrapperTest {
 
             assertNotEquals(wrapper1, wrapper2);
         }
+
+        @Test
+        void testEquals_oneEdataNullOtherNot() {
+            CompetencyAcquiredEvent event = CompetencyAcquiredEvent.builder()
+                    .userId("user123")
+                    .build();
+
+            CompetencyEventWrapper wrapper1 = CompetencyEventWrapper.builder().edata(null).build();
+            CompetencyEventWrapper wrapper2 = CompetencyEventWrapper.builder().edata(event).build();
+
+            assertNotEquals(wrapper1, wrapper2);
+            assertNotEquals(wrapper2, wrapper1);
+        }
+
+        @Test
+        void testHashCode_bothEdataNull() {
+            CompetencyEventWrapper wrapper1 = CompetencyEventWrapper.builder().edata(null).build();
+            CompetencyEventWrapper wrapper2 = CompetencyEventWrapper.builder().edata(null).build();
+
+            assertEquals(wrapper1, wrapper2);
+            assertEquals(wrapper1.hashCode(), wrapper2.hashCode());
+        }
     }
 
     @Nested

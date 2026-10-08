@@ -244,4 +244,59 @@ public class DefaultEncryptionServiceImplTest {
         assertNotNull("Salt should not be null", salt);
         assertFalse("Salt should not be empty", salt.isEmpty());
     }
+
+    @Test(expected = ProjectCommonException.class)
+    public void testGetSaltThrowsWhenKeyMissingEverywhere() throws Exception {
+        // Force the cached encryptionKey to be blank so getSalt() falls through
+        // to env/config lookups, and mock the config lookup to also return blank,
+        // so that the final "invalid salt" exception branch is exercised.
+        Field keyField = DefaultEncryptionServiceImpl.class.getDeclaredField("encryptionKey");
+        keyField.setAccessible(true);
+        String originalKey = (String) keyField.get(null);
+        try {
+            keyField.set(null, "");
+            try (MockedStatic<ProjectUtil> projectUtilMock = Mockito.mockStatic(ProjectUtil.class)) {
+                projectUtilMock.when(() -> ProjectUtil.getConfigValue(Constants.ENCRYPTION_KEY))
+                        .thenReturn(null);
+                DefaultEncryptionServiceImpl.getSalt();
+            }
+        } finally {
+            keyField.set(null, originalKey);
+        }
+    }
+
+    @Test
+    public void testEncryptDataMapWithNullEntryValueWhenEncryptionOn() throws Exception {
+        // Covers the branch where an entry's value is null (not a Map/List)
+        // so it should be skipped and not passed to encrypt().
+        Field field = DefaultEncryptionServiceImpl.class.getDeclaredField("sunbirdEncryption");
+        field.setAccessible(true);
+        field.set(encryptionService, "ON");
+
+        Map<String, Object> testData = new HashMap<>();
+        testData.put("nullValue", null);
+
+        Map<String, Object> result = encryptionService.encryptData(testData);
+
+        assertNotNull("Result should not be null", result);
+        assertNull("Null value should remain null", result.get("nullValue"));
+    }
+
+    @Test
+    public void testEncryptDataListWhenEncryptionOff() throws Exception {
+        // Covers the branch where encryption is OFF for the List overload.
+        Field field = DefaultEncryptionServiceImpl.class.getDeclaredField("sunbirdEncryption");
+        field.setAccessible(true);
+        field.set(encryptionService, "OFF");
+
+        List<Map<String, Object>> testList = new ArrayList<>();
+        Map<String, Object> map1 = new HashMap<>();
+        map1.put("key1", "value1");
+        testList.add(map1);
+
+        List<Map<String, Object>> result = encryptionService.encryptData(testList);
+
+        assertEquals("List should be unchanged when encryption is OFF", testList, result);
+        assertEquals("Value should remain unchanged", "value1", result.get(0).get("key1"));
+    }
 }

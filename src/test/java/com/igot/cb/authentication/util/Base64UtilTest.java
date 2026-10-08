@@ -325,4 +325,112 @@ public class Base64UtilTest {
         byte[] decoded = Base64Util.decode(paddedEncoded, 5, encoded.length, Base64Util.DEFAULT);
         assertEquals(originalStr, new String(decoded, StandardCharsets.UTF_8));
     }
+
+    // ==================== Additional coverage: Decoder/Encoder internals ====================
+
+    @Test
+    public void testDecoderMaxOutputSize() {
+        Base64Util.Decoder decoder = new Base64Util.Decoder(Base64Util.DEFAULT, new byte[10]);
+        assertEquals(10 * 3 / 4 + 10, decoder.maxOutputSize(10));
+    }
+
+    @Test
+    public void testEncoderMaxOutputSize() {
+        Base64Util.Encoder encoder = new Base64Util.Encoder(Base64Util.DEFAULT, null);
+        assertEquals(10 * 8 / 5 + 10, encoder.maxOutputSize(10));
+    }
+
+    @Test
+    public void testDecoderProcess_notFinished_retainsState() {
+        // Calling process() with finish=false exercises the "still reading" branch,
+        // which the public decode() API never reaches (it always finishes).
+        Base64Util.Decoder decoder = new Base64Util.Decoder(Base64Util.DEFAULT, new byte[10]);
+        boolean result = decoder.process("QU".getBytes(StandardCharsets.UTF_8), 0, 2, false);
+        assertTrue(result);
+    }
+
+    @Test
+    public void testDecode_singleTrailingCharacter_throwsIllegalArgumentException() {
+        // One leftover char (length % 4 == 1) lands the state machine in state 1 at finish time: illegal.
+        try {
+            Base64Util.decode("A", Base64Util.DEFAULT);
+            fail("Expected IllegalArgumentException for a single dangling base64 character");
+        } catch (IllegalArgumentException expected) {
+            // expected
+        }
+    }
+
+    @Test
+    public void testDecode_incompletePadding_throwsIllegalArgumentException() {
+        // "QU=" ends with exactly one '=' while the decoder is expecting a second one: illegal.
+        try {
+            Base64Util.decode("QU=", Base64Util.DEFAULT);
+            fail("Expected IllegalArgumentException for incomplete padding");
+        } catch (IllegalArgumentException expected) {
+            // expected
+        }
+    }
+
+    @Test
+    public void testDecode_dataCharAfterSinglePaddingChar_throwsIllegalArgumentException() {
+        // After one '=' (state 4), the decoder expects only another '=' or whitespace; a data char is illegal.
+        try {
+            Base64Util.decode("QU=A", Base64Util.DEFAULT);
+            fail("Expected IllegalArgumentException for data following a lone padding character");
+        } catch (IllegalArgumentException expected) {
+            // expected
+        }
+    }
+
+    @Test
+    public void testDecode_dataCharAfterCompletePadding_throwsIllegalArgumentException() {
+        // "QUI=" is a complete, valid 3-char + padding sequence (state 5); trailing data is illegal.
+        try {
+            Base64Util.decode("QUI=A", Base64Util.DEFAULT);
+            fail("Expected IllegalArgumentException for data following completed padding");
+        } catch (IllegalArgumentException expected) {
+            // expected
+        }
+    }
+
+    @Test
+    public void testDecode_equalsAfterSingleDataChar_throwsIllegalArgumentException() {
+        // "A=" has a single data char (state 1) followed directly by '=', which is not expected there.
+        try {
+            Base64Util.decode("A=", Base64Util.DEFAULT);
+            fail("Expected IllegalArgumentException for '=' immediately after one data character");
+        } catch (IllegalArgumentException expected) {
+            // expected
+        }
+    }
+
+    @Test
+    public void testEncoderProcess_tailOfOneByte_consumedOnNextCall() {
+        // Directly drives Encoder across two process() calls so the leftover-tail-of-one-byte
+        // branch (hit only when a prior non-finishing call left exactly one byte unconsumed) runs.
+        Base64Util.Encoder encoder = new Base64Util.Encoder(Base64Util.NO_WRAP, null);
+        encoder.output = new byte[100];
+        encoder.process(new byte[]{'A'}, 0, 1, false);
+        encoder.process(new byte[]{'B', 'C'}, 0, 2, true);
+        byte[] result = new byte[encoder.op];
+        System.arraycopy(encoder.output, 0, result, 0, encoder.op);
+        String encoded = new String(result, StandardCharsets.US_ASCII);
+        byte[] decoded = Base64Util.decode(encoded, Base64Util.NO_WRAP);
+        assertArrayEquals("ABC".getBytes(StandardCharsets.UTF_8), decoded);
+    }
+
+    @Test
+    public void testEncoderProcess_tailOfTwoBytes_consumedOnNextCall() {
+        // Same as above, but leaves a two-byte tail (hit when a prior non-finishing call left
+        // exactly two bytes unconsumed).
+        Base64Util.Encoder encoder = new Base64Util.Encoder(Base64Util.NO_WRAP, null);
+        encoder.output = new byte[100];
+        encoder.process(new byte[]{'A', 'B'}, 0, 2, false);
+        encoder.process(new byte[]{'C'}, 0, 1, true);
+        byte[] result = new byte[encoder.op];
+        System.arraycopy(encoder.output, 0, result, 0, encoder.op);
+        String encoded = new String(result, StandardCharsets.US_ASCII);
+        byte[] decoded = Base64Util.decode(encoded, Base64Util.NO_WRAP);
+        assertArrayEquals("ABC".getBytes(StandardCharsets.UTF_8), decoded);
+    }
 }

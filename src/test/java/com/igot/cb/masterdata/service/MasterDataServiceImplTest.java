@@ -1240,7 +1240,7 @@ public class MasterDataServiceImplTest {
         degreesMap.put(Constants.DEGREES, degreesList);
 
         // Use a spy on the real cache service to see actual behavior
-        CacheService spyCacheService = spy(new CacheService(null, null, null, new ObjectMapper()));
+        CacheService spyCacheService = spy(new CacheService(null, null, new ObjectMapper()));
         MasterDataServiceImpl spyService = spy(new MasterDataServiceImpl(accessTokenValidator, cassandraOperation, spyCacheService));
 
         when(cassandraOperation.updateRecord(anyString(), anyString(), anyMap()))

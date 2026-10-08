@@ -91,4 +91,37 @@ public class PropertiesCacheTest {
         String result3 = instance.getProperty(uniqueKey);
         assertEquals("unique.value", result3);
     }
+
+    @Test
+    public void testGetProperty_EnvVarTakesPrecedence() {
+        // NUMBER_OF_PROCESSORS is a standard, reliably non-blank Windows environment variable.
+        // This exercises the branch where System.getenv(key) is not blank and is returned directly.
+        String envKey = "NUMBER_OF_PROCESSORS";
+        String envValue = System.getenv(envKey);
+        org.junit.Assume.assumeTrue("Environment variable not present, skipping", StringUtilsNotBlank(envValue));
+
+        String result = propertiesCache.getProperty(envKey);
+        assertEquals(envValue, result);
+    }
+
+    @Test
+    public void testReadProperty_EnvVarTakesPrecedence() {
+        String envKey = "NUMBER_OF_PROCESSORS";
+        String envValue = System.getenv(envKey);
+        org.junit.Assume.assumeTrue("Environment variable not present, skipping", StringUtilsNotBlank(envValue));
+
+        String result = propertiesCache.readProperty(envKey);
+        assertEquals(envValue, result);
+    }
+
+    private static boolean StringUtilsNotBlank(String value) {
+        return value != null && !value.trim().isEmpty();
+    }
+
+    @Test
+    public void testGetInstance_ReturnsSameSingletonInstance() {
+        PropertiesCache instance1 = PropertiesCache.getInstance();
+        PropertiesCache instance2 = PropertiesCache.getInstance();
+        assertEquals(instance1, instance2);
+    }
 }

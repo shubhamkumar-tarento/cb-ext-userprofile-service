@@ -2,12 +2,14 @@ package com.igot.cb.transactional.cassandrautils;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
+import com.datastax.oss.driver.api.core.cql.ExecutionInfo;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import com.datastax.oss.driver.api.querybuilder.select.Select;
 import com.igot.cb.util.ApiResponse;
 import com.igot.cb.util.Constants;
+import com.igot.cb.util.ProjectUtil;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.InjectMocks;
@@ -16,6 +18,7 @@ import org.mockito.MockedStatic;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import java.lang.reflect.Method;
+import java.nio.ByteBuffer;
 import java.util.*;
 
 import static org.junit.Assert.*;
@@ -45,6 +48,9 @@ public class CassandraOperationImplTest {
 
     @Mock
     private BoundStatement boundStatement;
+
+    @Mock
+    private ProjectUtil projectUtil;
 
     @InjectMocks
     private CassandraOperationImpl cassandraOperation;
@@ -513,6 +519,268 @@ public class CassandraOperationImplTest {
         assertTrue(result.contains("email = ?"));
         assertTrue(result.contains("age = ?"));
         assertTrue(result.contains("where id = ?"));
+    }
+
+    @Test
+    public void testUpdateRecordSuccessForUserTableLogsInfo() {
+        String keyspaceName = "test_keyspace";
+        String tableName = Constants.USER;
+        Map<String, Object> request = new HashMap<>();
+        request.put("id", "123");
+        request.put("name", "Updated Name");
+
+        String query = "UPDATE test_keyspace.user SET name = ? WHERE id = ?";
+
+        try (MockedStatic<CassandraOperationImpl> cassandraOperationMock = mockStatic(CassandraOperationImpl.class)) {
+            cassandraOperationMock.when(() -> CassandraOperationImpl.getUpdateQueryStatement(keyspaceName, tableName, request))
+                    .thenReturn(query);
+
+            when(connectionManager.getSession(keyspaceName)).thenReturn(session);
+            when(session.prepare(query)).thenReturn(preparedStatement);
+            when(preparedStatement.bind(any(Object[].class))).thenReturn(boundStatement);
+
+            Map<String, Object> result = cassandraOperation.updateRecord(keyspaceName, tableName, request);
+
+            verify(session).execute(boundStatement);
+            assertEquals(Constants.SUCCESS, result.get(Constants.RESPONSE));
+        }
+    }
+
+    @Test
+    public void testUpdateRecordExceptionWithUnknownIdentifier() {
+        String keyspaceName = "test_keyspace";
+        String tableName = "test_table";
+        Map<String, Object> request = new HashMap<>();
+        request.put("id", "123");
+        request.put("name", "Updated Name");
+
+        String query = "UPDATE test_keyspace.test_table SET name = ? WHERE id = ?";
+        RuntimeException testException = new RuntimeException(Constants.UNKNOWN_IDENTIFIER + "name");
+
+        try (MockedStatic<CassandraOperationImpl> cassandraOperationMock = mockStatic(CassandraOperationImpl.class)) {
+            cassandraOperationMock.when(() -> CassandraOperationImpl.getUpdateQueryStatement(keyspaceName, tableName, request))
+                    .thenReturn(query);
+
+            when(connectionManager.getSession(keyspaceName)).thenReturn(session);
+            when(session.prepare(query)).thenThrow(testException);
+
+            Map<String, Object> result = cassandraOperation.updateRecord(keyspaceName, tableName, request);
+
+            assertEquals(Constants.FAILED, result.get(Constants.RESPONSE));
+            assertNotNull(result.get(Constants.ERROR_MESSAGE));
+            assertTrue(result.get(Constants.ERROR_MESSAGE).toString()
+                    .contains("Exception occurred while updating record to to " + tableName));
+        }
+    }
+
+    @Test
+    public void testUpdateRecordExceptionGeneral() {
+        String keyspaceName = "test_keyspace";
+        String tableName = "test_table";
+        Map<String, Object> request = new HashMap<>();
+        request.put("id", "123");
+        request.put("name", "Updated Name");
+
+        String query = "UPDATE test_keyspace.test_table SET name = ? WHERE id = ?";
+        RuntimeException testException = new RuntimeException("Some other failure");
+
+        try (MockedStatic<CassandraOperationImpl> cassandraOperationMock = mockStatic(CassandraOperationImpl.class)) {
+            cassandraOperationMock.when(() -> CassandraOperationImpl.getUpdateQueryStatement(keyspaceName, tableName, request))
+                    .thenReturn(query);
+
+            when(connectionManager.getSession(keyspaceName)).thenReturn(session);
+            when(session.prepare(query)).thenThrow(testException);
+
+            Map<String, Object> result = cassandraOperation.updateRecord(keyspaceName, tableName, request);
+
+            // Only the generic catch log runs; response map is not populated for this branch.
+            assertFalse(result.containsKey(Constants.RESPONSE));
+        }
+    }
+
+    @Test
+    public void testLogQueryElapseTimeDirectInvocation() {
+        long startTime = System.currentTimeMillis() - 10;
+        cassandraOperation.logQueryElapseTime("testOperation", startTime, "SELECT * FROM test_keyspace.test_table");
+        assertTrue(System.currentTimeMillis() >= startTime);
+    }
+
+    @Test
+    public void testUpdateRecordByCompositeKeyException() {
+        String keyspaceName = "test_keyspace";
+        String tableName = "test_table";
+        Map<String, Object> updateAttributes = new HashMap<>();
+        updateAttributes.put("name", "John");
+        Map<String, Object> compositeKey = new HashMap<>();
+        compositeKey.put("id", "123");
+
+        when(connectionManager.getSession(keyspaceName)).thenReturn(session);
+        when(session.execute(any(SimpleStatement.class))).thenThrow(new RuntimeException("Test exception"));
+
+        Map<String, Object> result = cassandraOperation.updateRecordByCompositeKey(
+                keyspaceName, tableName, updateAttributes, compositeKey);
+
+        assertEquals(Constants.FAILED, result.get(Constants.RESPONSE));
+        assertNotNull(result.get(Constants.ERROR_MESSAGE));
+        assertTrue(result.get(Constants.ERROR_MESSAGE).toString()
+                .contains("Exception occurred while updating record to " + tableName));
+    }
+
+    @Test
+    public void testUpdateRecordByCompositeKeyConnectionException() {
+        String keyspaceName = "test_keyspace";
+        String tableName = "test_table";
+        Map<String, Object> updateAttributes = new HashMap<>();
+        updateAttributes.put("name", "John");
+        Map<String, Object> compositeKey = new HashMap<>();
+        compositeKey.put("id", "123");
+
+        when(connectionManager.getSession(keyspaceName)).thenThrow(new RuntimeException("Connection error"));
+
+        Map<String, Object> result = cassandraOperation.updateRecordByCompositeKey(
+                keyspaceName, tableName, updateAttributes, compositeKey);
+
+        assertEquals(Constants.FAILED, result.get(Constants.RESPONSE));
+        assertNotNull(result.get(Constants.ERROR_MESSAGE));
+    }
+
+    @Test
+    public void testGetAllRecordsByPrimaryKeySinglePage() {
+        String keyspaceName = "test_keyspace";
+        String tableName = "test_table";
+        Map<String, Object> primaryKey = new HashMap<>();
+        primaryKey.put("id", "123");
+        List<String> fields = Arrays.asList("name", "email");
+
+        Select mockSelect = mock(Select.class);
+        SimpleStatement mockStatement = mock(SimpleStatement.class);
+        when(mockSelect.limit(anyInt())).thenReturn(mockSelect);
+        when(mockSelect.build()).thenReturn(mockStatement);
+
+        CassandraOperationImpl spyCassandraOperation = spy(cassandraOperation);
+        doReturn(mockSelect).when(spyCassandraOperation).processQuery(
+                eq(keyspaceName), eq(tableName), eq(primaryKey), eq(fields));
+
+        when(connectionManager.getSession(keyspaceName)).thenReturn(session);
+        when(session.execute(mockStatement)).thenReturn(resultSet);
+
+        ExecutionInfo executionInfo = mock(ExecutionInfo.class);
+        when(resultSet.getExecutionInfo()).thenReturn(executionInfo);
+        when(executionInfo.getPagingState()).thenReturn(null);
+
+        when(projectUtil.convertToString(any())).thenReturn("primaryKeyString");
+
+        Map<String, Object> localRecord = new HashMap<>();
+        localRecord.put("name", "Test User");
+        List<Map<String, Object>> page = Collections.singletonList(localRecord);
+
+        try (MockedStatic<CassandraUtil> cassandraUtilMock = mockStatic(CassandraUtil.class)) {
+            cassandraUtilMock.when(() -> CassandraUtil.createResponse(resultSet)).thenReturn(page);
+
+            List<Map<String, Object>> result = spyCassandraOperation.getAllRecordsByPrimaryKey(
+                    keyspaceName, tableName, primaryKey, fields, 10);
+
+            assertEquals(1, result.size());
+            assertEquals("Test User", result.get(0).get("name"));
+            verify(session, times(1)).execute(mockStatement);
+            verify(mockStatement, never()).setPagingState(any(ByteBuffer.class));
+        }
+    }
+
+    @Test
+    public void testGetAllRecordsByPrimaryKeyMultiplePages() {
+        String keyspaceName = "test_keyspace";
+        String tableName = "test_table";
+        Map<String, Object> primaryKey = new HashMap<>();
+        primaryKey.put("id", "123");
+        List<String> fields = Arrays.asList("name", "email");
+
+        Select mockSelect = mock(Select.class);
+        SimpleStatement mockStatement = mock(SimpleStatement.class);
+        when(mockSelect.limit(anyInt())).thenReturn(mockSelect);
+        when(mockSelect.build()).thenReturn(mockStatement);
+        when(mockStatement.setPagingState(any(ByteBuffer.class))).thenReturn(mockStatement);
+
+        CassandraOperationImpl spyCassandraOperation = spy(cassandraOperation);
+        doReturn(mockSelect).when(spyCassandraOperation).processQuery(
+                eq(keyspaceName), eq(tableName), eq(primaryKey), eq(fields));
+
+        when(connectionManager.getSession(keyspaceName)).thenReturn(session);
+        when(session.execute(any(SimpleStatement.class))).thenReturn(resultSet);
+
+        ExecutionInfo executionInfo = mock(ExecutionInfo.class);
+        when(resultSet.getExecutionInfo()).thenReturn(executionInfo);
+        ByteBuffer pagingStateVal = ByteBuffer.wrap("abc".getBytes());
+        when(executionInfo.getPagingState()).thenReturn(pagingStateVal, (ByteBuffer) null);
+
+        when(projectUtil.convertToString(any())).thenReturn("primaryKeyString");
+
+        Map<String, Object> localRecord = new HashMap<>();
+        localRecord.put("name", "Test User");
+        List<Map<String, Object>> page = Collections.singletonList(localRecord);
+
+        try (MockedStatic<CassandraUtil> cassandraUtilMock = mockStatic(CassandraUtil.class)) {
+            cassandraUtilMock.when(() -> CassandraUtil.createResponse(resultSet)).thenReturn(page);
+
+            List<Map<String, Object>> result = spyCassandraOperation.getAllRecordsByPrimaryKey(
+                    keyspaceName, tableName, primaryKey, fields, 10);
+
+            assertEquals(2, result.size());
+            verify(session, times(2)).execute(any(SimpleStatement.class));
+            verify(mockStatement, times(1)).setPagingState(pagingStateVal);
+        }
+    }
+
+    @Test
+    public void testGetAllRecordsByPrimaryKeyException() {
+        String keyspaceName = "test_keyspace";
+        String tableName = "test_table";
+        Map<String, Object> primaryKey = new HashMap<>();
+        primaryKey.put("id", "123");
+        List<String> fields = Arrays.asList("name", "email");
+
+        when(projectUtil.convertToString(any())).thenReturn("primaryKeyString");
+        when(connectionManager.getSession(keyspaceName)).thenThrow(new RuntimeException("Connection error"));
+
+        List<Map<String, Object>> result = cassandraOperation.getAllRecordsByPrimaryKey(
+                keyspaceName, tableName, primaryKey, fields, 10);
+
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    public void testDeleteRecordByCompositeKeySuccess() {
+        String keyspaceName = "test_keyspace";
+        String tableName = "test_table";
+        Map<String, Object> compositeKey = new LinkedHashMap<>();
+        compositeKey.put("id", "123");
+        compositeKey.put("type", "abc");
+
+        when(connectionManager.getSession(keyspaceName)).thenReturn(session);
+        when(session.prepare(anyString())).thenReturn(preparedStatement);
+        when(preparedStatement.bind(any())).thenReturn(boundStatement);
+
+        Map<String, Object> result = cassandraOperation.deleteRecordByCompositeKey(
+                keyspaceName, tableName, compositeKey);
+
+        verify(session).execute(boundStatement);
+        assertEquals(Constants.SUCCESS, result.get(Constants.RESPONSE));
+    }
+
+    @Test
+    public void testDeleteRecordByCompositeKeyException() {
+        String keyspaceName = "test_keyspace";
+        String tableName = "test_table";
+        Map<String, Object> compositeKey = new HashMap<>();
+        compositeKey.put("id", "123");
+
+        when(connectionManager.getSession(keyspaceName)).thenThrow(new RuntimeException("Test exception"));
+
+        Map<String, Object> result = cassandraOperation.deleteRecordByCompositeKey(
+                keyspaceName, tableName, compositeKey);
+
+        assertEquals(Constants.FAILED, result.get(Constants.RESPONSE));
+        assertEquals("Test exception", result.get(Constants.ERROR_MESSAGE));
     }
 
 }

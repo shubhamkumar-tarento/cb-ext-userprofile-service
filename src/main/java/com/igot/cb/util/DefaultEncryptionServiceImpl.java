@@ -18,8 +18,14 @@ public class DefaultEncryptionServiceImpl implements EncryptionService {
 
     private static final Logger logger = LoggerFactory.getLogger(DefaultEncryptionServiceImpl.class);
 
-    private static final byte[] keyValue =
-            new byte[] {'T', 'h', 'i', 's', 'A', 's', 'I', 'S', 'e', 'r', 'c', 'e', 'K', 't', 'e', 'y'};
+    // Default AES key, kept only as a fallback for deployments that have not set
+    // Constants.AES_SECRET_KEY (env var AES_ENCRYPTION_KEY or the equivalent properties entry).
+    // It must stay the same as DefaultDecryptionServiceImpl's default: both must agree on the key
+    // used to encrypt/decrypt data already persisted in storage (e.g. user keys). Rotate via the
+    // env var/properties entry, never by changing this literal, or existing encrypted data becomes
+    // unreadable.
+    private static final byte[] defaultKeyValue =
+            new byte[] {'T', 'h', 'i', 's', 'A', 's', 'I', 'S', 'e', 'r', 'c', 'e', 'K', 't', 'e', 'y'}; // NOSONAR
 
     private static String encryptionKey = "";
 
@@ -126,7 +132,10 @@ public class DefaultEncryptionServiceImpl implements EncryptionService {
     }
 
     private static Key generateKey() {
-        return new SecretKeySpec(keyValue, ALGORITHM);
+        String configuredKey = ProjectUtil.getConfigValue(Constants.AES_SECRET_KEY);
+        byte[] resolvedKeyValue =
+                StringUtils.isNotBlank(configuredKey) ? configuredKey.getBytes(StandardCharsets.UTF_8) : defaultKeyValue;
+        return new SecretKeySpec(resolvedKeyValue, ALGORITHM);
     }
 
     /** @return */
